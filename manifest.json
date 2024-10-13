@@ -3,6 +3,9 @@
   "name": "My Chrome Extension",
   "version": "1.0.0",
   "description": "A simple Chrome extension created with React and TypeScript",
+  "content_security_policy": {
+    "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
+  },
   "action": {
     "default_popup": "index.html",
     "default_icon": {
