@@ -1,10 +1,10 @@
-import { useTranscriber } from "./useTranscriber";
+import { useTranscriber } from "./hooks/useTranscriber";
 
 import Progress from "./components/Progress";
 import FileTile from "./components/FileTile";
 import FolderIcon from "./assets/folder-icon.svg";
 import { useEffect } from "react";
-import useSummarize from "./useSummarize";
+import useSummarize from "./hooks/useSummarize";
 
 function App() {
   const transcriber = useTranscriber();
