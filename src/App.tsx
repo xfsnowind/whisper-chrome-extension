@@ -1,11 +1,18 @@
-import React, { useState, useEffect } from 'react';
-import { Settings } from 'lucide-react';
+import React, { useState, useEffect } from "react";
+import { Settings } from "lucide-react";
+
+const canDetect = async (): Promise<TranslationAvailability> => {
+  const canDetect123 = await window.translation.canDetect();
+  console.log(1234, canDetect123);
+  return canDetect123;
+};
 
 function App() {
   const [count, setCount] = useState(0);
 
   useEffect(() => {
-    chrome.storage.sync.get(['count'], (result) => {
+    canDetect();
+    chrome.storage.sync.get(["count"], (result) => {
       setCount(result.count || 0);
     });
   }, []);
