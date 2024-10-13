@@ -1,5 +1,5 @@
 export default function FileTile(props: {
-  icon: JSX.Element;
+  iconStr: string;
   text: string;
   onFileUpdate: (
     decoded: AudioBuffer,
@@ -39,22 +39,22 @@ export default function FileTile(props: {
   };
 
   return (
-    <Tile icon={props.icon} text={props.text} onClick={() => elem.click()} />
+    <Tile
+      iconStr={props.iconStr}
+      text={props.text}
+      onClick={() => elem.click()}
+    />
   );
 }
 
-function Tile(props: {
-  icon: JSX.Element;
-  text?: string;
-  onClick?: () => void;
-}) {
+function Tile(props: { iconStr: string; text?: string; onClick?: () => void }) {
   return (
     <button
       onClick={props.onClick}
       className="flex items-center justify-center rounded-lg p-2 bg-blue text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 transition-all duration-200"
     >
       <div className="w-7 h-7">
-        <svg dangerouslySetInnerHTML={{ __html: props.icon }} />
+        <img src={props.iconStr} />
       </div>
       {props.text && (
         <div className="ml-2 break-text text-center text-md w-30">

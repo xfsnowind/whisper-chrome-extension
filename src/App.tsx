@@ -2,7 +2,7 @@ import { useTranscriber } from "./hooks/useTranscriber";
 
 import Progress from "./components/Progress";
 import FileTile from "./components/FileTile";
-import FolderIcon from "./assets/folder-icon.svg";
+import FolderIcon from "@/assets/folder-icon.svg";
 import { useEffect } from "react";
 import useSummarize from "./hooks/useSummarize";
 
@@ -12,14 +12,16 @@ function App() {
   const { initializeApplication } = useSummarize();
 
   useEffect(() => {
-    initializeApplication();
-  }, [initializeApplication]);
+    if (!transcriber.isBusy && transcriber.transcript) {
+      initializeApplication(transcriber.transcript.text);
+    }
+  }, [initializeApplication, transcriber.isBusy, transcriber.transcript]);
 
   return (
-    <div className="w-64 p-4 bg-white">
+    <div className="min-w-64 min-h-32 p-4 bg-white">
       <div className="flex flex-col items-center justify-between mb-4 ">
         <FileTile
-          icon={<FolderIcon />}
+          iconStr={FolderIcon}
           text="From file"
           onFileUpdate={(decoded) => {
             transcriber.start(decoded);

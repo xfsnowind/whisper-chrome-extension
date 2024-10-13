@@ -166,14 +166,14 @@ const transcribe = async ({
       if (chunks.length === 0) return;
       // Append text to the last chunk
       chunks[chunks.length - 1].text += x;
-      handleMessage({
-        status: "update",
-        data: {
-          text: "", // No need to send full text yet
-          chunks,
-          tps
-        }
-      });
+      // handleMessage({
+      //   status: "update",
+      //   data: {
+      //     text: "", // No need to send full text yet
+      //     chunks,
+      //     tps
+      //   }
+      // });
     },
     on_chunk_end: (x) => {
       const current = chunks[chunks.length - 1];
@@ -224,6 +224,7 @@ export function useTranscriber() {
     undefined
   );
   const [progressItems, setProgressItems] = useState<ProgressItem[]>([]);
+  const [isBusy, setIsBusy] = useState(false);
 
   const handleMessage = useCallback((message: StreamCallbackMessage) => {
     switch (message.status) {
@@ -239,13 +240,14 @@ export function useTranscriber() {
         );
         break;
       case "update":
-        setTranscript({
-          isBusy: true,
-          text: message.data.text,
-          tps: message.data.tps,
-          chunks: message.data.chunks
-        });
-        // setIsBusy(busy);
+        // Progress
+        //   setTranscript({
+        //     isBusy: true,
+        //     text: message.data.text,
+        //     tps: message.data.tps,
+        //     chunks: message.data.chunks
+        //   });
+        setIsBusy(true);
         break;
 
       case "initiate":
@@ -257,7 +259,7 @@ export function useTranscriber() {
       //   setIsModelLoading(false);
       // break;
       case "error":
-        // setIsBusy(false);
+        setIsBusy(false);
         alert(
           `An error occurred: "${message.data.message}". Please file a bug report.`
         );
@@ -278,6 +280,7 @@ export function useTranscriber() {
   const postRequest = useCallback(
     async (audioData: AudioBuffer | undefined) => {
       if (audioData) {
+        setIsBusy(true);
         let audio;
         if (audioData.numberOfChannels === 2) {
           const SCALING_FACTOR = Math.sqrt(2);
@@ -303,11 +306,12 @@ export function useTranscriber() {
         });
         if (result === null) return;
 
+        setIsBusy(false);
         setTranscript(result);
       }
     },
     [handleMessage]
   );
 
-  return { start: postRequest, transcript, progressItems };
+  return { start: postRequest, transcript, progressItems, isBusy };
 }

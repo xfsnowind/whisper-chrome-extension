@@ -59,39 +59,42 @@ export default function useSummarize() {
     []
   );
 
-  const initializeApplication = useCallback(async () => {
-    const summarizationApiAvailable =
-      window.ai !== undefined && window.ai.summarizer !== undefined;
-    if (!summarizationApiAvailable) {
-      console.error("Summarization API is not available");
-      return;
-    }
+  const initializeApplication = useCallback(
+    async (input?: string) => {
+      const summarizationApiAvailable =
+        window.ai !== undefined && window.ai.summarizer !== undefined;
+      if (!summarizationApiAvailable) {
+        console.error("Summarization API is not available");
+        return;
+      }
 
-    const canSummarize = await window.ai.summarizer!.capabilities();
-    if (canSummarize.available === "no") {
-      console.error("Summarization API is not available");
-      return;
-    }
+      const canSummarize = await window.ai.summarizer!.capabilities();
+      if (canSummarize.available === "no") {
+        console.error("Summarization API is not available");
+        return;
+      }
 
-    let timeout: number | undefined = undefined;
-    function scheduleSummarization() {
-      // Debounces the call to the summarization API. This will run the summarization once the user
-      // hasn't typed anything for at least 1 second.
-      clearTimeout(timeout);
-      timeout = setTimeout(async () => {
-        const session = await createSummarizationSession(
-          "tl;dr",
-          "plain-text",
-          "short"
-        );
-        const summary = await session.summarize(text);
-        session.destroy();
-        console.log(summary);
-      }, 1000);
-    }
+      let timeout: number | undefined = undefined;
+      function scheduleSummarization() {
+        // Debounces the call to the summarization API. This will run the summarization once the user
+        // hasn't typed anything for at least 1 second.
+        clearTimeout(timeout);
+        timeout = setTimeout(async () => {
+          const session = await createSummarizationSession(
+            "tl;dr",
+            "plain-text",
+            "short"
+          );
+          const summary = await session.summarize(input ?? text);
+          session.destroy();
+          console.log(summary);
+        }, 1000);
+      }
 
-    scheduleSummarization();
-  }, [createSummarizationSession]);
+      scheduleSummarization();
+    },
+    [createSummarizationSession]
+  );
 
   return { initializeApplication };
 }
