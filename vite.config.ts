@@ -1,9 +1,22 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 import { resolve } from "path";
+import fs from "fs";
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react(),
+    {
+      name: "copy-manifest",
+      buildStart() {
+        this.emitFile({
+          type: "asset",
+          fileName: "manifest.json",
+          source: fs.readFileSync("manifest.json", "utf-8")
+        });
+      }
+    }
+  ],
   build: {
     outDir: "dist",
     rollupOptions: {
