@@ -6,6 +6,8 @@ import FolderIcon from "@/assets/folder-icon.svg";
 import { useEffect } from "react";
 import useSummarize from "./hooks/useSummarize";
 
+const IS_WEBGPU_AVAILABLE = !!navigator.gpu;
+
 function App() {
   const transcriber = useTranscriber();
 
@@ -17,7 +19,9 @@ function App() {
     }
   }, [initializeApplication, transcriber.isBusy, transcriber.transcript]);
 
-  return (
+  console.log(transcriber.transcript);
+
+  return IS_WEBGPU_AVAILABLE ? (
     <div className="min-w-64 min-h-32 p-4 bg-white">
       <div className="flex flex-col items-center justify-between mb-4 ">
         <FileTile
@@ -38,6 +42,12 @@ function App() {
           </div>
         )}
       </div>
+    </div>
+  ) : (
+    <div className="fixed w-screen h-screen bg-black z-10 bg-opacity-[92%] text-white text-2xl font-semibold flex justify-center items-center text-center">
+      WebGPU is not supported
+      <br />
+      by this browser :&#40;
     </div>
   );
 }

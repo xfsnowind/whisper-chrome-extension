@@ -74,24 +74,14 @@ export default function useSummarize() {
         return;
       }
 
-      let timeout: number | undefined = undefined;
-      function scheduleSummarization() {
-        // Debounces the call to the summarization API. This will run the summarization once the user
-        // hasn't typed anything for at least 1 second.
-        clearTimeout(timeout);
-        timeout = setTimeout(async () => {
-          const session = await createSummarizationSession(
-            "tl;dr",
-            "plain-text",
-            "short"
-          );
-          const summary = await session.summarize(input ?? text);
-          session.destroy();
-          console.log(summary);
-        }, 1000);
-      }
-
-      scheduleSummarization();
+      const session = await createSummarizationSession(
+        "tl;dr",
+        "plain-text",
+        "short"
+      );
+      const summary = await session.summarize(input ?? text);
+      session.destroy();
+      console.log(summary);
     },
     [createSummarizationSession]
   );
