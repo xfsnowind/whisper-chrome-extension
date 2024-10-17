@@ -8,16 +8,16 @@ import {
   WhisperTextStreamer,
   WhisperTokenizer,
 } from "@huggingface/transformers";
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { match } from "ts-pattern";
 
 type Chunks = { text: string; timestamp: [number, number | null] }[];
 
 export interface TranscriberData {
-  isBusy: boolean;
+  // isBusy: boolean;
   tps: number;
   text: string;
-  chunks: Chunks;
+  chunks?: Chunks;
 }
 
 interface ModelFileProgressItem {
@@ -94,18 +94,15 @@ const getTranscriberInstance = async ({
     if (factory.instance !== null) {
       const instance =
         (await factory.getInstance()) as AutomaticSpeechRecognitionPipeline;
-      if (instance) {
-        instance.dispose();
-      }
+      instance?.dispose();
       factory.instance = null;
     }
   }
 
   // Load transcriber model
   console.log("Load transcriber model");
-  return (await factory.getInstance(
-    handleModelFilesMessage,
-  )) as AutomaticSpeechRecognitionPipeline;
+  const instance = await factory.getInstance(handleModelFilesMessage);
+  return instance as AutomaticSpeechRecognitionPipeline;
 };
 
 const transcribe = async ({
@@ -123,14 +120,8 @@ const transcribe = async ({
   transcriber: AutomaticSpeechRecognitionPipeline;
   handleTranscribeMessage: (message: TranscrbeMessage) => void;
 }) => {
-  console.log("trancriber method", transcriber);
   const isDistilWhisper = model.startsWith("distil-whisper/");
 
-  console.log(
-    "time_precision",
-    transcriber?.processor?.feature_extractor?.config.chunk_length,
-    transcriber?.model?.config,
-  );
   const time_precision =
     transcriber.processor.feature_extractor.config.chunk_length /
     transcriber.model.config.max_source_positions;
@@ -152,7 +143,7 @@ const transcribe = async ({
   let chunk_count = 0;
   let start_time;
   let num_tokens: number = 0;
-  let tps: number;
+  let tps: number = 0;
 
   console.log("before stream: time_precision", time_precision);
   const streamer = new WhisperTextStreamer(
@@ -225,15 +216,13 @@ const transcribe = async ({
     return null;
   });
 
-  return {
-    tps,
-    ...output,
-  };
+  return output ? { ...output, tps } : null;
 };
 
 export function useTranscriber() {
-  const [transcriber, setTranscriber] =
-    useState<AutomaticSpeechRecognitionPipeline | null>(null);
+  const transcriberRef = useRef<AutomaticSpeechRecognitionPipeline | null>(
+    null,
+  );
   const [transcript, setTranscript] = useState<TranscriberData | undefined>(
     undefined,
   );
@@ -302,7 +291,7 @@ export function useTranscriber() {
       handleModelFilesMessage,
     });
     console.log("transcriberInstance", transcriberInstance);
-    setTranscriber(transcriberInstance);
+    transcriberRef.current = transcriberInstance;
   }, [handleModelFilesMessage]);
 
   const start = useCallback(
@@ -327,10 +316,9 @@ export function useTranscriber() {
 
         let result = null;
 
-        console.log("transcriber:", !!transcriber);
-        if (transcriber) {
+        if (transcriberRef.current) {
           result = await transcribe({
-            transcriber,
+            transcriber: transcriberRef.current,
             audio: audio as AudioPipelineInputs,
             model: "onnx-community/whisper-tiny",
             language: "english",
@@ -346,7 +334,7 @@ export function useTranscriber() {
         setTranscript(result);
       }
     },
-    [handleTranscribeMessage, transcriber],
+    [handleTranscribeMessage, transcriberRef],
   );
 
   return {
