@@ -51,19 +51,14 @@ class PipelineFactory {
   static instance: Promise<AllTasks[keyof AllTasks]> | null;
   static tokenizer: PreTrainedTokenizer | null = null;
 
-  static async getInstance(
-    handleModelFilesCallback?: (data: ModelFileMessage) => void,
-  ) {
+  static async getInstance(handleModelFilesCallback?: (data: ModelFileMessage) => void) {
     if (this.task === null) {
       throw new Error("The task has not been set");
     }
     if (this.instance === null) {
       this.instance = pipeline(this.task, this.model, {
         dtype: {
-          encoder_model:
-            this.model === "onnx-community/whisper-large-v3-turbo"
-              ? "fp16"
-              : "fp32",
+          encoder_model: this.model === "onnx-community/whisper-large-v3-turbo" ? "fp16" : "fp32",
           decoder_model_merged: "q4", // or 'fp32' ('fp16' is broken)
         },
         device: "webgpu",
@@ -102,8 +97,7 @@ const transcribe = async ({
     p.model = model;
 
     if (p.instance !== null) {
-      const instance =
-        (await p.getInstance()) as AutomaticSpeechRecognitionPipeline;
+      const instance = (await p.getInstance()) as AutomaticSpeechRecognitionPipeline;
       if (instance) {
         instance.dispose();
       }
@@ -141,49 +135,46 @@ const transcribe = async ({
   let tps: number;
 
   console.log("before stream: time_precision", time_precision);
-  const streamer = new WhisperTextStreamer(
-    transcriber.tokenizer as WhisperTokenizer,
-    {
-      time_precision,
-      on_chunk_start: (x) => {
-        const offset = (chunk_length_s - stride_length_s) * chunk_count;
-        chunks.push({
-          text: "",
-          timestamp: [offset + x, null],
-          finalised: false,
-          offset,
-        });
-      },
-      token_callback_function: () => {
-        start_time ??= performance.now();
-        if (num_tokens++ > 0) {
-          tps = (num_tokens / (performance.now() - start_time)) * 1000;
-        }
-      },
-      // Function to call when a piece of text is ready to display
-      callback_function: (x) => {
-        if (chunks.length === 0) return;
-        // Append text to the last chunk
-        chunks[chunks.length - 1].text += x;
-        handleTranscribeMessage({
-          status: "transcribing",
-          chunks,
-          tps,
-        });
-      },
-      on_chunk_end: (x) => {
-        const current = chunks[chunks.length - 1];
-        current.timestamp[1] = x + current.offset;
-        current.finalised = true;
-      },
-      // Function to call when the stream is finalized
-      on_finalize: () => {
-        start_time = null;
-        num_tokens = 0;
-        ++chunk_count;
-      },
+  const streamer = new WhisperTextStreamer(transcriber.tokenizer as WhisperTokenizer, {
+    time_precision,
+    on_chunk_start: (x) => {
+      const offset = (chunk_length_s - stride_length_s) * chunk_count;
+      chunks.push({
+        text: "",
+        timestamp: [offset + x, null],
+        finalised: false,
+        offset,
+      });
     },
-  );
+    token_callback_function: () => {
+      start_time ??= performance.now();
+      if (num_tokens++ > 0) {
+        tps = (num_tokens / (performance.now() - start_time)) * 1000;
+      }
+    },
+    // Function to call when a piece of text is ready to display
+    callback_function: (x) => {
+      if (chunks.length === 0) return;
+      // Append text to the last chunk
+      chunks[chunks.length - 1].text += x;
+      handleTranscribeMessage({
+        status: "transcribing",
+        chunks,
+        tps,
+      });
+    },
+    on_chunk_end: (x) => {
+      const current = chunks[chunks.length - 1];
+      current.timestamp[1] = x + current.offset;
+      current.finalised = true;
+    },
+    // Function to call when the stream is finalized
+    on_finalize: () => {
+      start_time = null;
+      num_tokens = 0;
+      ++chunk_count;
+    },
+  });
 
   // Actually run transcription
   const output = await transcriber(audio, {
@@ -218,12 +209,8 @@ const transcribe = async ({
 };
 
 export function useTranscriber() {
-  const [transcript, setTranscript] = useState<TranscriberData | undefined>(
-    undefined,
-  );
-  const [progressItems, setProgressItems] = useState<
-    Array<ModelFileProgressItem>
-  >([]);
+  const [transcript, setTranscript] = useState<TranscriberData | undefined>(undefined);
+  const [progressItems, setProgressItems] = useState<Array<ModelFileProgressItem>>([]);
   const [isBusy, setIsBusy] = useState(false);
 
   const handleModelFilesMessage = useCallback((message: ModelFileMessage) => {
@@ -250,9 +237,7 @@ export function useTranscriber() {
       .with({ status: "done" }, (msg) => {
         // Model file loaded: remove the progress item from the list.
         console.log("done:", msg);
-        setProgressItems((prev) =>
-          prev.filter((item) => item.file !== msg.file),
-        );
+        setProgressItems((prev) => prev.filter((item) => item.file !== msg.file));
       })
       .with({ status: "ready" }, (msg) => {
         // all the model files are ready
@@ -280,9 +265,7 @@ export function useTranscriber() {
       })
       .with({ status: "error" }, ({ error }) => {
         setIsBusy(false);
-        alert(
-          `An error occurred: "${error.message}". Please file a bug report.`,
-        );
+        alert(`An error occurred: "${error.message}". Please file a bug report.`);
       })
       .otherwise(() => {
         console.log("otherwise:", message);

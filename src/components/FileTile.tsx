@@ -1,11 +1,7 @@
 export default function FileTile(props: {
   iconStr: string;
   text: string;
-  onFileUpdate: (
-    decoded: AudioBuffer,
-    blobUrl: string,
-    mimeType: string
-  ) => void;
+  onFileUpdate: (decoded: AudioBuffer, blobUrl: string, mimeType: string) => void;
 }) {
   // Create hidden input element
   const elem = document.createElement("input");
@@ -25,7 +21,7 @@ export default function FileTile(props: {
       if (!arrayBuffer) return;
 
       const audioCTX = new AudioContext({
-        sampleRate: SAMPLING_RATE
+        sampleRate: SAMPLING_RATE,
       });
 
       const decoded = await audioCTX.decodeAudioData(arrayBuffer);
@@ -56,11 +52,7 @@ function Tile(props: { iconStr: string; text?: string; onClick?: () => void }) {
       <div className="w-7 h-7">
         <img src={props.iconStr} />
       </div>
-      {props.text && (
-        <div className="ml-2 break-text text-center text-md w-30">
-          {props.text}
-        </div>
-      )}
+      {props.text && <div className="ml-2 break-text text-center text-md w-30">{props.text}</div>}
     </button>
   );
 }

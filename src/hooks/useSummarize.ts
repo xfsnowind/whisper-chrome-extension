@@ -32,7 +32,7 @@ export default function useSummarize() {
       type: AISummarizerType,
       format: AISummarizerFormat,
       length: AISummarizerLength,
-      downloadProgressCallback?: AIModelDownloadCallback
+      downloadProgressCallback?: AIModelDownloadCallback,
     ): Promise<AISummarizerSession> => {
       const canSummarize = await window.ai.summarizer!.capabilities();
       if (canSummarize.available === "no") {
@@ -42,21 +42,18 @@ export default function useSummarize() {
       const summarizationSession = await window.ai.summarizer!.create({
         type,
         format,
-        length
+        length,
       });
       if (canSummarize.available === "after-download") {
         if (downloadProgressCallback) {
-          summarizationSession.addEventListener(
-            "downloadprogress",
-            downloadProgressCallback
-          );
+          summarizationSession.addEventListener("downloadprogress", downloadProgressCallback);
         }
         await summarizationSession.ready;
       }
 
       return summarizationSession;
     },
-    []
+    [],
   );
 
   const initializeApplication = useCallback(
@@ -74,16 +71,12 @@ export default function useSummarize() {
         return;
       }
 
-      const session = await createSummarizationSession(
-        "tl;dr",
-        "plain-text",
-        "short"
-      );
+      const session = await createSummarizationSession("tl;dr", "plain-text", "short");
       const summary = await session.summarize(input ?? text);
       session.destroy();
       console.log(summary);
     },
-    [createSummarizationSession]
+    [createSummarizationSession],
   );
 
   return { initializeApplication };

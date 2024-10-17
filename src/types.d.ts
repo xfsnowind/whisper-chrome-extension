@@ -19,9 +19,7 @@ declare global {
 
   type AISummarizer = {
     capabilities: () => Promise<AISummarizerCapabilities>;
-    create: (
-      options?: AISummarizerCreateOptions
-    ) => Promise<AISummarizerSession>;
+    create: (options?: AISummarizerCreateOptions) => Promise<AISummarizerSession>;
   };
 
   type AISummarizerCapabilities = {

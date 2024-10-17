@@ -19,7 +19,9 @@ function App() {
     }
   }, [initializeApplication, transcriber.isBusy, transcriber.transcript]);
 
-  console.log(transcriber.transcript);
+  if (transcriber.transcript) {
+    console.log(transcriber.transcript);
+  }
 
   return IS_WEBGPU_AVAILABLE ? (
     <div className="min-w-64 min-h-32 p-4 bg-white">
@@ -36,7 +38,10 @@ function App() {
             <label>Loading model files... (only run once)</label>
             {transcriber.progressItems.map((data) => (
               <div key={data.file}>
-                <Progress text={data.file} percentage={data.progress} />
+                <Progress
+                  text={data.file}
+                  percentage={data.progress}
+                />
               </div>
             ))}
           </div>
