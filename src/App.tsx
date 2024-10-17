@@ -9,39 +9,54 @@ import useSummarize from "./hooks/useSummarize";
 const IS_WEBGPU_AVAILABLE = !!navigator.gpu;
 
 function App() {
-  const transcriber = useTranscriber();
+  const {
+    transcript,
+    isBusy,
+    start,
+    initialize,
+    progressItems,
+    isModelFilesReady,
+  } = useTranscriber();
 
   const { initializeApplication } = useSummarize();
 
   useEffect(() => {
-    if (!transcriber.isBusy && transcriber.transcript) {
-      initializeApplication(transcriber.transcript.text);
+    if (!isBusy && transcript) {
+      initializeApplication(transcript.text);
     }
-  }, [initializeApplication, transcriber.isBusy, transcriber.transcript]);
+  }, [initializeApplication, isBusy, transcript]);
 
-  if (transcriber.transcript) {
-    console.log(transcriber.transcript);
+  if (transcript) {
+    console.log(transcript);
   }
 
   return IS_WEBGPU_AVAILABLE ? (
     <div className="min-w-64 min-h-32 p-4 bg-white">
       <div className="flex flex-col items-center justify-between mb-4 ">
+        {isModelFilesReady ? (
+          "Model files loaded"
+        ) : (
+          <button
+            className="flex items-center justify-center rounded-lg p-2 bg-blue text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 transition-all duration-200"
+            onClick={initialize}
+          >
+            Load Models
+          </button>
+        )}
         <FileTile
           iconStr={FolderIcon}
           text="From file"
           onFileUpdate={(decoded) => {
-            transcriber.start(decoded);
+            start(decoded);
           }}
         />
-        {transcriber.progressItems.length > 0 && (
+
+        {progressItems.length > 0 && (
           <div className="relative z-10 p-4 w-full text-center">
             <label>Loading model files... (only run once)</label>
-            {transcriber.progressItems.map((data) => (
+            {progressItems.map((data) => (
               <div key={data.file}>
-                <Progress
-                  text={data.file}
-                  percentage={data.progress}
-                />
+                <Progress text={data.file} percentage={data.progress} />
               </div>
             ))}
           </div>

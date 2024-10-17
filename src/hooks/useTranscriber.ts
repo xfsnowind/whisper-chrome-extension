@@ -51,14 +51,19 @@ class PipelineFactory {
   static instance: Promise<AllTasks[keyof AllTasks]> | null;
   static tokenizer: PreTrainedTokenizer | null = null;
 
-  static async getInstance(handleModelFilesCallback?: (data: ModelFileMessage) => void) {
+  static async getInstance(
+    handleModelFilesCallback?: (data: ModelFileMessage) => void,
+  ) {
     if (this.task === null) {
       throw new Error("The task has not been set");
     }
     if (this.instance === null) {
       this.instance = pipeline(this.task, this.model, {
         dtype: {
-          encoder_model: this.model === "onnx-community/whisper-large-v3-turbo" ? "fp16" : "fp32",
+          encoder_model:
+            this.model === "onnx-community/whisper-large-v3-turbo"
+              ? "fp16"
+              : "fp32",
           decoder_model_merged: "q4", // or 'fp32' ('fp16' is broken)
         },
         device: "webgpu",
@@ -74,43 +79,58 @@ class AutomaticSpeechRecognitionPipelineFactory extends PipelineFactory {
   static task = "automatic-speech-recognition" as PipelineType;
 }
 
+const getTranscriberInstance = async ({
+  model,
+  handleModelFilesMessage,
+}: {
+  model: string;
+  handleModelFilesMessage: (message: ModelFileMessage) => void;
+}) => {
+  const factory = AutomaticSpeechRecognitionPipelineFactory;
+  if (factory.model !== model) {
+    // Invalidate model if different
+    factory.model = model;
+
+    if (factory.instance !== null) {
+      const instance =
+        (await factory.getInstance()) as AutomaticSpeechRecognitionPipeline;
+      if (instance) {
+        instance.dispose();
+      }
+      factory.instance = null;
+    }
+  }
+
+  // Load transcriber model
+  console.log("Load transcriber model");
+  return (await factory.getInstance(
+    handleModelFilesMessage,
+  )) as AutomaticSpeechRecognitionPipeline;
+};
+
 const transcribe = async ({
   audio,
   model,
   subtask,
   language,
-  handleModelFilesMessage,
+  transcriber,
   handleTranscribeMessage,
 }: {
   audio: AudioPipelineInputs;
   language: string;
   subtask: string;
   model: string;
-  handleModelFilesMessage: (message: ModelFileMessage) => void;
+  transcriber: AutomaticSpeechRecognitionPipeline;
   handleTranscribeMessage: (message: TranscrbeMessage) => void;
 }) => {
+  console.log("trancriber method", transcriber);
   const isDistilWhisper = model.startsWith("distil-whisper/");
 
-  const p = AutomaticSpeechRecognitionPipelineFactory;
-  if (p.model !== model) {
-    // Invalidate model if different
-    p.model = model;
-
-    if (p.instance !== null) {
-      const instance = (await p.getInstance()) as AutomaticSpeechRecognitionPipeline;
-      if (instance) {
-        instance.dispose();
-      }
-      p.instance = null;
-    }
-  }
-
-  // Load transcriber model
-  console.log("Load transcriber model");
-  const transcriber = (await p.getInstance(
-    handleModelFilesMessage,
-  )) as AutomaticSpeechRecognitionPipeline;
-
+  console.log(
+    "time_precision",
+    transcriber?.processor?.feature_extractor?.config.chunk_length,
+    transcriber?.model?.config,
+  );
   const time_precision =
     transcriber.processor.feature_extractor.config.chunk_length /
     transcriber.model.config.max_source_positions;
@@ -135,46 +155,49 @@ const transcribe = async ({
   let tps: number;
 
   console.log("before stream: time_precision", time_precision);
-  const streamer = new WhisperTextStreamer(transcriber.tokenizer as WhisperTokenizer, {
-    time_precision,
-    on_chunk_start: (x) => {
-      const offset = (chunk_length_s - stride_length_s) * chunk_count;
-      chunks.push({
-        text: "",
-        timestamp: [offset + x, null],
-        finalised: false,
-        offset,
-      });
+  const streamer = new WhisperTextStreamer(
+    transcriber.tokenizer as WhisperTokenizer,
+    {
+      time_precision,
+      on_chunk_start: (x) => {
+        const offset = (chunk_length_s - stride_length_s) * chunk_count;
+        chunks.push({
+          text: "",
+          timestamp: [offset + x, null],
+          finalised: false,
+          offset,
+        });
+      },
+      token_callback_function: () => {
+        start_time ??= performance.now();
+        if (num_tokens++ > 0) {
+          tps = (num_tokens / (performance.now() - start_time)) * 1000;
+        }
+      },
+      // Function to call when a piece of text is ready to display
+      callback_function: (x) => {
+        if (chunks.length === 0) return;
+        // Append text to the last chunk
+        chunks[chunks.length - 1].text += x;
+        handleTranscribeMessage({
+          status: "transcribing",
+          chunks,
+          tps,
+        });
+      },
+      on_chunk_end: (x) => {
+        const current = chunks[chunks.length - 1];
+        current.timestamp[1] = x + current.offset;
+        current.finalised = true;
+      },
+      // Function to call when the stream is finalized
+      on_finalize: () => {
+        start_time = null;
+        num_tokens = 0;
+        ++chunk_count;
+      },
     },
-    token_callback_function: () => {
-      start_time ??= performance.now();
-      if (num_tokens++ > 0) {
-        tps = (num_tokens / (performance.now() - start_time)) * 1000;
-      }
-    },
-    // Function to call when a piece of text is ready to display
-    callback_function: (x) => {
-      if (chunks.length === 0) return;
-      // Append text to the last chunk
-      chunks[chunks.length - 1].text += x;
-      handleTranscribeMessage({
-        status: "transcribing",
-        chunks,
-        tps,
-      });
-    },
-    on_chunk_end: (x) => {
-      const current = chunks[chunks.length - 1];
-      current.timestamp[1] = x + current.offset;
-      current.finalised = true;
-    },
-    // Function to call when the stream is finalized
-    on_finalize: () => {
-      start_time = null;
-      num_tokens = 0;
-      ++chunk_count;
-    },
-  });
+  );
 
   // Actually run transcription
   const output = await transcriber(audio, {
@@ -209,22 +232,26 @@ const transcribe = async ({
 };
 
 export function useTranscriber() {
-  const [transcript, setTranscript] = useState<TranscriberData | undefined>(undefined);
-  const [progressItems, setProgressItems] = useState<Array<ModelFileProgressItem>>([]);
+  const [transcriber, setTranscriber] =
+    useState<AutomaticSpeechRecognitionPipeline | null>(null);
+  const [transcript, setTranscript] = useState<TranscriberData | undefined>(
+    undefined,
+  );
+  const [isModelFilesReady, setIsModelFilesReady] = useState(false);
+  const [progressItems, setProgressItems] = useState<
+    Array<ModelFileProgressItem>
+  >([]);
   const [isBusy, setIsBusy] = useState(false);
 
   const handleModelFilesMessage = useCallback((message: ModelFileMessage) => {
     match(message)
       .with({ status: "initiate" }, (msg) => {
         // Model file start load: add a new progress item to the list.
-        // setIsModelLoading(true);
-        console.log("init", msg);
         setProgressItems((prev) => [...prev, msg]);
       })
       .with({ status: "progress" }, (msg) => {
         // loading the model file
         // Model file progress: update one of the progress items.
-        // console.log("progress:", msg);
         setProgressItems((prev) =>
           prev.map((item) => {
             if (item.file === msg.file) {
@@ -236,18 +263,15 @@ export function useTranscriber() {
       })
       .with({ status: "done" }, (msg) => {
         // Model file loaded: remove the progress item from the list.
-        console.log("done:", msg);
-        setProgressItems((prev) => prev.filter((item) => item.file !== msg.file));
+        setProgressItems((prev) =>
+          prev.filter((item) => item.file !== msg.file),
+        );
       })
-      .with({ status: "ready" }, (msg) => {
+      .with({ status: "ready" }, () => {
         // all the model files are ready
-        console.log("all the model files are ready", msg);
-        // setIsModelLoading(false);
+        setIsModelFilesReady(true);
       })
-
-      .otherwise((data) => {
-        console.log("otherwise:", data);
-      });
+      .otherwise(() => null);
   }, []);
 
   const handleTranscribeMessage = useCallback((message: TranscrbeMessage) => {
@@ -265,12 +289,21 @@ export function useTranscriber() {
       })
       .with({ status: "error" }, ({ error }) => {
         setIsBusy(false);
-        alert(`An error occurred: "${error.message}". Please file a bug report.`);
+        alert(
+          `An error occurred: "${error.message}". Please file a bug report.`,
+        );
       })
-      .otherwise(() => {
-        console.log("otherwise:", message);
-      });
+      .exhaustive();
   }, []);
+
+  const initialize = useCallback(async () => {
+    const transcriberInstance = await getTranscriberInstance({
+      model: "onnx-community/whisper-tiny",
+      handleModelFilesMessage,
+    });
+    console.log("transcriberInstance", transcriberInstance);
+    setTranscriber(transcriberInstance);
+  }, [handleModelFilesMessage]);
 
   const start = useCallback(
     async (audioData: AudioBuffer | undefined) => {
@@ -292,22 +325,36 @@ export function useTranscriber() {
           audio = audioData.getChannelData(0);
         }
 
-        const result = await transcribe({
-          audio: audio as AudioPipelineInputs,
-          model: "onnx-community/whisper-tiny",
-          language: "english",
-          subtask: "transcribe",
-          handleModelFilesMessage,
-          handleTranscribeMessage,
-        });
+        let result = null;
+
+        console.log("transcriber:", !!transcriber);
+        if (transcriber) {
+          result = await transcribe({
+            transcriber,
+            audio: audio as AudioPipelineInputs,
+            model: "onnx-community/whisper-tiny",
+            language: "english",
+            subtask: "transcribe",
+            handleTranscribeMessage,
+          });
+        } else {
+          alert("Model hasn't been initialized!");
+        }
         if (result === null) return;
 
         setIsBusy(false);
         setTranscript(result);
       }
     },
-    [handleModelFilesMessage, handleTranscribeMessage],
+    [handleTranscribeMessage, transcriber],
   );
 
-  return { start, transcript, progressItems, isBusy };
+  return {
+    start,
+    transcript,
+    progressItems,
+    isBusy,
+    initialize,
+    isModelFilesReady,
+  };
 }
