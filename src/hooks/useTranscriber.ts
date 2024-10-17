@@ -1,21 +1,26 @@
 import {
   AllTasks,
+  AudioPipelineInputs,
   AutomaticSpeechRecognitionPipeline,
   pipeline,
   PipelineType,
   PreTrainedTokenizer,
-  WhisperTextStreamer
+  WhisperTextStreamer,
+  WhisperTokenizer,
 } from "@huggingface/transformers";
 import { useCallback, useState } from "react";
+import { match } from "ts-pattern";
+
+type Chunks = { text: string; timestamp: [number, number | null] }[];
 
 export interface TranscriberData {
   isBusy: boolean;
-  tps?: number;
+  tps: number;
   text: string;
-  chunks: { text: string; timestamp: [number, number | null] }[];
+  chunks: Chunks;
 }
 
-interface ProgressItem {
+interface ModelFileProgressItem {
   file: string;
   loaded: number;
   progress: number;
@@ -24,27 +29,19 @@ interface ProgressItem {
   status: string;
 }
 
-interface TranscriberUpdateData {
-  data: {
-    text: string;
-    chunks: { text: string; timestamp: [number, number | null] }[];
-    tps: number;
-  };
-}
-
-type StreamCallbackMessage =
+type ModelFileMessage =
+  | (ModelFileProgressItem & { status: "initiate" })
   | { status: "progress"; progress: number; file: string }
+  | { status: "ready"; file: string }
+  | { status: "done"; file: string };
+
+type TranscrbeMessage =
   | {
-      status: "initiate";
-      file: string;
-      loaded: number;
-      progress: number;
-      total: number;
-      name: string;
+      chunks: Chunks;
+      tps: number;
+      status: "transcribing";
     }
-  | { status: "error"; data: Error }
-  | { status: "done"; file: string }
-  | (TranscriberUpdateData & { status: "update" });
+  | { status: "error"; error: Error };
 
 // Define model factories
 // Ensures only one model is created of each type
@@ -54,12 +51,9 @@ class PipelineFactory {
   static instance: Promise<AllTasks[keyof AllTasks]> | null;
   static tokenizer: PreTrainedTokenizer | null = null;
 
-  constructor(tokenizer: PreTrainedTokenizer, model: string) {
-    this.tokenizer = tokenizer;
-    this.model = model;
-  }
-
-  static async getInstance(progress_callback?: (data: any) => void) {
+  static async getInstance(
+    handleModelFilesCallback?: (data: ModelFileMessage) => void,
+  ) {
     if (this.task === null) {
       throw new Error("The task has not been set");
     }
@@ -70,10 +64,10 @@ class PipelineFactory {
             this.model === "onnx-community/whisper-large-v3-turbo"
               ? "fp16"
               : "fp32",
-          decoder_model_merged: "q4" // or 'fp32' ('fp16' is broken)
+          decoder_model_merged: "q4", // or 'fp32' ('fp16' is broken)
         },
         device: "webgpu",
-        progress_callback
+        progress_callback: handleModelFilesCallback,
       });
     }
 
@@ -90,13 +84,15 @@ const transcribe = async ({
   model,
   subtask,
   language,
-  handleMessage
+  handleModelFilesMessage,
+  handleTranscribeMessage,
 }: {
-  audio: AudioBuffer;
+  audio: AudioPipelineInputs;
   language: string;
   subtask: string;
   model: string;
-  handleMessage: (message: StreamCallbackMessage) => void;
+  handleModelFilesMessage: (message: ModelFileMessage) => void;
+  handleTranscribeMessage: (message: TranscrbeMessage) => void;
 }) => {
   const isDistilWhisper = model.startsWith("distil-whisper/");
 
@@ -117,20 +113,20 @@ const transcribe = async ({
 
   // Load transcriber model
   console.log("Load transcriber model");
-  const transcriber = await p.getInstance((data) => {
-    handleMessage(data);
-  });
+  const transcriber = (await p.getInstance(
+    handleModelFilesMessage,
+  )) as AutomaticSpeechRecognitionPipeline;
 
   const time_precision =
     transcriber.processor.feature_extractor.config.chunk_length /
     transcriber.model.config.max_source_positions;
 
   // Storage for chunks to be processed. Initialise with an empty chunk.
-  /** @type {{ text: string; offset: number, timestamp: [number, number | null] }[]} */
   const chunks: Array<{
     text: string;
     offset: number;
     timestamp: [number, number | null];
+    finalised: boolean;
   }> = [];
 
   // TODO: Storage for fully-processed and merged chunks
@@ -145,47 +141,49 @@ const transcribe = async ({
   let tps: number;
 
   console.log("before stream: time_precision", time_precision);
-  const streamer = new WhisperTextStreamer(transcriber.tokenizer, {
-    time_precision,
-    on_chunk_start: (x) => {
-      const offset = (chunk_length_s - stride_length_s) * chunk_count;
-      chunks.push({
-        text: "",
-        timestamp: [offset + x, null],
-        finalised: false,
-        offset
-      });
+  const streamer = new WhisperTextStreamer(
+    transcriber.tokenizer as WhisperTokenizer,
+    {
+      time_precision,
+      on_chunk_start: (x) => {
+        const offset = (chunk_length_s - stride_length_s) * chunk_count;
+        chunks.push({
+          text: "",
+          timestamp: [offset + x, null],
+          finalised: false,
+          offset,
+        });
+      },
+      token_callback_function: () => {
+        start_time ??= performance.now();
+        if (num_tokens++ > 0) {
+          tps = (num_tokens / (performance.now() - start_time)) * 1000;
+        }
+      },
+      // Function to call when a piece of text is ready to display
+      callback_function: (x) => {
+        if (chunks.length === 0) return;
+        // Append text to the last chunk
+        chunks[chunks.length - 1].text += x;
+        handleTranscribeMessage({
+          status: "transcribing",
+          chunks,
+          tps,
+        });
+      },
+      on_chunk_end: (x) => {
+        const current = chunks[chunks.length - 1];
+        current.timestamp[1] = x + current.offset;
+        current.finalised = true;
+      },
+      // Function to call when the stream is finalized
+      on_finalize: () => {
+        start_time = null;
+        num_tokens = 0;
+        ++chunk_count;
+      },
     },
-    token_callback_function: (x) => {
-      start_time ??= performance.now();
-      if (num_tokens++ > 0) {
-        tps = (num_tokens / (performance.now() - start_time)) * 1000;
-      }
-    },
-    callback_function: (x) => {
-      if (chunks.length === 0) return;
-      // Append text to the last chunk
-      chunks[chunks.length - 1].text += x;
-      // handleMessage({
-      //   status: "update",
-      //   data: {
-      //     text: "", // No need to send full text yet
-      //     chunks,
-      //     tps
-      //   }
-      // });
-    },
-    on_chunk_end: (x) => {
-      const current = chunks[chunks.length - 1];
-      current.timestamp[1] = x + current.offset;
-      current.finalised = true;
-    },
-    on_finalize: () => {
-      start_time = null;
-      num_tokens = 0;
-      ++chunk_count;
-    }
-  });
+  );
 
   // Actually run transcription
   const output = await transcriber(audio, {
@@ -206,41 +204,72 @@ const transcribe = async ({
     force_full_sequences: false,
 
     // Callback functions
-    streamer // after each generation step
+    streamer, // after each generation step
   }).catch((error: Error) => {
     console.error(error);
-    handleMessage({ status: "error", data: error });
+    handleTranscribeMessage({ status: "error", error });
     return null;
   });
 
   return {
     tps,
-    ...output
+    ...output,
   };
 };
 
 export function useTranscriber() {
   const [transcript, setTranscript] = useState<TranscriberData | undefined>(
-    undefined
+    undefined,
   );
-  const [progressItems, setProgressItems] = useState<ProgressItem[]>([]);
+  const [progressItems, setProgressItems] = useState<
+    Array<ModelFileProgressItem>
+  >([]);
   const [isBusy, setIsBusy] = useState(false);
 
-  const handleMessage = useCallback((message: StreamCallbackMessage) => {
-    switch (message.status) {
-      case "progress":
+  const handleModelFilesMessage = useCallback((message: ModelFileMessage) => {
+    match(message)
+      .with({ status: "initiate" }, (msg) => {
+        // Model file start load: add a new progress item to the list.
+        // setIsModelLoading(true);
+        console.log("init", msg);
+        setProgressItems((prev) => [...prev, msg]);
+      })
+      .with({ status: "progress" }, (msg) => {
+        // loading the model file
         // Model file progress: update one of the progress items.
+        // console.log("progress:", msg);
         setProgressItems((prev) =>
           prev.map((item) => {
-            if (item.file === message.file) {
-              return { ...item, progress: message.progress };
+            if (item.file === msg.file) {
+              return { ...item, progress: msg.progress };
             }
             return item;
-          })
+          }),
         );
-        break;
-      case "update":
-        // Progress
+      })
+      .with({ status: "done" }, (msg) => {
+        // Model file loaded: remove the progress item from the list.
+        console.log("done:", msg);
+        setProgressItems((prev) =>
+          prev.filter((item) => item.file !== msg.file),
+        );
+      })
+      .with({ status: "ready" }, (msg) => {
+        // all the model files are ready
+        console.log("all the model files are ready", msg);
+        // setIsModelLoading(false);
+      })
+
+      .otherwise((data) => {
+        console.log("otherwise:", data);
+      });
+  }, []);
+
+  const handleTranscribeMessage = useCallback((message: TranscrbeMessage) => {
+    match(message)
+      .with({ status: "transcribing" }, (msg) => {
+        // transcribing the file
+        console.log("transcribing:", msg.tps, msg.chunks);
         //   setTranscript({
         //     isBusy: true,
         //     text: message.data.text,
@@ -248,40 +277,23 @@ export function useTranscriber() {
         //     chunks: message.data.chunks
         //   });
         setIsBusy(true);
-        break;
-
-      case "initiate":
-        // Model file start load: add a new progress item to the list.
-        // setIsModelLoading(true);
-        setProgressItems((prev) => [...prev, message]);
-        break;
-      // case "ready":
-      //   setIsModelLoading(false);
-      // break;
-      case "error":
+      })
+      .with({ status: "error" }, ({ error }) => {
         setIsBusy(false);
         alert(
-          `An error occurred: "${message.data.message}". Please file a bug report.`
+          `An error occurred: "${error.message}". Please file a bug report.`,
         );
-        break;
-      case "done":
-        // Model file loaded: remove the progress item from the list.
-        setProgressItems((prev) =>
-          prev.filter((item) => item.file !== message.file)
-        );
-        break;
-
-      default:
-        // initiate/download/done
-        break;
-    }
+      })
+      .otherwise(() => {
+        console.log("otherwise:", message);
+      });
   }, []);
 
-  const postRequest = useCallback(
+  const start = useCallback(
     async (audioData: AudioBuffer | undefined) => {
       if (audioData) {
         setIsBusy(true);
-        let audio;
+        let audio: Float32Array;
         if (audioData.numberOfChannels === 2) {
           const SCALING_FACTOR = Math.sqrt(2);
 
@@ -298,11 +310,12 @@ export function useTranscriber() {
         }
 
         const result = await transcribe({
-          audio,
+          audio: audio as AudioPipelineInputs,
           model: "onnx-community/whisper-tiny",
           language: "english",
           subtask: "transcribe",
-          handleMessage
+          handleModelFilesMessage,
+          handleTranscribeMessage,
         });
         if (result === null) return;
 
@@ -310,8 +323,8 @@ export function useTranscriber() {
         setTranscript(result);
       }
     },
-    [handleMessage]
+    [handleModelFilesMessage, handleTranscribeMessage],
   );
 
-  return { start: postRequest, transcript, progressItems, isBusy };
+  return { start, transcript, progressItems, isBusy };
 }
