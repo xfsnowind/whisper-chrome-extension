@@ -14,7 +14,10 @@
       "128": "icon128.svg"
     }
   },
-  "permissions": ["storage"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "permissions": ["storage", "tabCapture", "offscreen"],
   "icons": {
     "16": "icon16.svg",
     "48": "icon48.svg",

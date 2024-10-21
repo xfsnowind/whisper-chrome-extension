@@ -12,28 +12,29 @@ export default defineConfig({
         this.emitFile({
           type: "asset",
           fileName: "manifest.json",
-          source: fs.readFileSync("manifest.json", "utf-8")
+          source: fs.readFileSync("manifest.json", "utf-8"),
         });
-      }
-    }
+      },
+    },
   ],
   build: {
     outDir: "dist",
     rollupOptions: {
       input: {
-        main: resolve(__dirname, "index.html")
+        main: resolve(__dirname, "index.html"),
+        background: "src/background.ts",
       },
       output: {
         entryFileNames: "[name].js",
         chunkFileNames: "[name].js",
-        assetFileNames: "[name].[ext]"
-      }
-    }
+        assetFileNames: "[name].[ext]",
+      },
+    },
   },
   publicDir: "public",
   resolve: {
     alias: {
-      "@": resolve(__dirname, "src")
-    }
-  }
+      "@": resolve(__dirname, "src"),
+    },
+  },
 });
