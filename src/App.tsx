@@ -5,6 +5,8 @@ import FileTile from "./components/FileTile";
 import FolderIcon from "@/assets/folder-icon.svg";
 import { useEffect, useState } from "react";
 import useSummarize from "./hooks/useSummarize";
+import usePrompt from "./hooks/usePrompt";
+import useYtTranscript from "./hooks/useYtTranscript";
 
 const IS_WEBGPU_AVAILABLE = "gpu" in navigator && !!navigator.gpu;
 
@@ -23,6 +25,19 @@ function App() {
   } = useTranscriber();
 
   const { initializeApplication } = useSummarize();
+  const {createPromptSession} = usePrompt();
+  
+
+ 
+
+
+  useEffect(() => {
+    const ytTranscript = useYtTranscript();
+    createPromptSession(ytTranscript);
+    
+    console.log(1234);
+    
+  }, [createPromptSession]);
 
   useEffect(() => {
     if (!isBusy && transcript) {

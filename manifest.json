@@ -14,7 +14,10 @@
       "128": "icon128.svg"
     }
   },
-  "permissions": ["storage"],
+  "permissions": [
+    "storage",
+    "activeTab"
+  ],
   "icons": {
     "16": "icon16.svg",
     "48": "icon48.svg",
