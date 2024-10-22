@@ -9,15 +9,9 @@ import {
   WhisperForConditionalGeneration,
   full,
 } from "@huggingface/transformers";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 import { match } from "ts-pattern";
-import {
-  Chunks,
-  ModelFileMessage,
-  ModelFileProgressItem,
-  TranscrbeMessage,
-  TranscriberData,
-} from "./type";
+import { ModelFileMessage, ModelFileProgressItem, TranscrbeMessage } from "./type";
 import Constants from "../utils/Constants";
 
 class AutomaticSpeechRecognitionPipeline {
@@ -52,7 +46,8 @@ class AutomaticSpeechRecognitionPipeline {
 const transcribeRecord = async ({
   audio,
   handleTranscribeMessage,
-}: {
+  continueRecordingTrigger,
+}: Props & {
   audio: AudioPipelineInputs;
   handleTranscribeMessage: (message: TranscrbeMessage) => void;
 }) => {
@@ -60,7 +55,7 @@ const transcribeRecord = async ({
 
   let startTime;
   let numTokens = 0;
-  let tps: number;
+  let tps: number = 0;
 
   const streamer = new TextStreamer(tokenizer, {
     skip_prompt: true,
@@ -70,6 +65,7 @@ const transcribeRecord = async ({
 
       if (numTokens++ > 0) {
         tps = (numTokens / (performance.now() - startTime)) * 1000;
+        console.log("transcribing:", output);
         handleTranscribeMessage({
           status: "transcribing",
           chunks: output,
@@ -88,8 +84,10 @@ const transcribeRecord = async ({
     streamer,
   });
 
+  // NOTES: should be triggered after generate to request the new data
+  continueRecordingTrigger();
+
   const outputText = tokenizer.batch_decode(outputs, { skip_special_tokens: true });
-  console.log("outputText", outputText);
   return { chunks: outputText, tps };
 };
 
@@ -101,24 +99,30 @@ const loadModelFiles = async ({
   // Load the pipeline and save it for future use.
   // We also add a progress callback to the pipeline so that we can
   // track model loading.
-  const [tokenizer, processor, model] =
+  const [_tokenizer, _processor, model] =
     await AutomaticSpeechRecognitionPipeline.getInstance(handleModelFilesMessage);
 
   // Run model with dummy input to compile shaders
   await model.generate({
     input_features: full([1, 80, 3000], 0.0),
     max_new_tokens: 1,
+    generation_config: {
+      language: "chinese",
+    },
   });
 
   handleModelFilesMessage({ status: "ready" });
 };
 
-export function useAudioTranscriber() {
-  const transcriberRef = useRef<AutomaticSpeechRecognitionPipeline | null>(null);
+type Props = {
+  continueRecordingTrigger: () => void;
+};
+
+export function useAudioTranscriber({ continueRecordingTrigger }: Props) {
   const [transcript, setTranscript] = useState<
     | {
         tps: number;
-        chunks: Chunks;
+        chunks: Array<string>;
       }
     | undefined
   >(undefined);
@@ -159,7 +163,6 @@ export function useAudioTranscriber() {
     match(message)
       .with({ status: "transcribing" }, (msg) => {
         // transcribing the file
-        console.log("transcribing:", msg.tps, msg.chunks);
         //   setTranscript({
         //     isBusy: true,
         //     text: message.data.text,
@@ -187,6 +190,7 @@ export function useAudioTranscriber() {
         const result = await transcribeRecord({
           audio: audioData as AudioPipelineInputs,
           handleTranscribeMessage,
+          continueRecordingTrigger,
         });
 
         if (result === null) return;
@@ -195,7 +199,7 @@ export function useAudioTranscriber() {
         setTranscript(result);
       }
     },
-    [handleTranscribeMessage, transcriberRef],
+    [handleTranscribeMessage],
   );
 
   return {

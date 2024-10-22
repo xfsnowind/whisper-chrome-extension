@@ -16,8 +16,6 @@ function App() {
   >(undefined);
   const [recordData, setRecordData] = useState<{ decoded: Float32Array } | undefined>(undefined);
 
-  console.log("recordData", recordData);
-
   // const [isRecording, setIsRecording] = useState(false);
   // const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [isValidUrl, setIsValidUrl] = useState(true);
@@ -33,7 +31,11 @@ function App() {
   //   useTranscriber();
 
   const { transcript, isBusy, start, initialize, progressItems, isModelFilesReady } =
-    useAudioTranscriber();
+    useAudioTranscriber({
+      continueRecordingTrigger: () => {
+        recorderRef.current?.requestData();
+      },
+    });
 
   // const { initializeApplication } = useSummarize();
 
@@ -43,21 +45,17 @@ function App() {
   //   }
   // }, [initializeApplication, isBusy, transcript]);
 
-  if (transcript) {
-    console.log(transcript);
-  }
+  console.log("transcript:", transcript?.chunks);
 
   useEffect(() => {
     chrome.runtime.onMessage.addListener((request) => {
       if (request.type === "start-recording") {
-        console.log();
         startRecording(request.data);
       }
     });
 
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
       const currentTab = tabs[0];
-      console.log("currentTab", currentTab);
       setTab(currentTab);
       setIsValidUrl(!currentTab.url?.startsWith("chrome://"));
     });
@@ -98,6 +96,8 @@ function App() {
 
     // Stopping the tracks makes sure the recording icon in the tab is removed.
     recorderRef.current?.stream.getTracks().forEach((t) => t.stop());
+
+    recorderRef.current = null;
   };
 
   const startRecording = useCallback(async (streamId: number) => {
@@ -128,18 +128,13 @@ function App() {
     const source = audioContextRef.current.createMediaStreamSource(media);
     source.connect(audioContextRef.current.destination);
 
-    console.log("media:", media);
-
     // Start recording.
     recorderRef.current = new MediaRecorder(media, { mimeType: "video/webm" });
     recorderRef.current.onstart = () => {
-      console.log("start");
       setIsRecording(true);
       setChunks([]);
     };
     recorderRef.current.ondataavailable = (event) => {
-      console.log("data available:", event);
-      // data.push(event.data);
       if (event.data.size > 0) {
         setChunks((prev) => [...prev, event.data]);
       } else {
@@ -154,7 +149,6 @@ function App() {
       setIsRecording(false);
     };
     recorderRef.current.start();
-    // recorder.start();
 
     // // Record the current state in the URL. This provides a very low-bandwidth
     // // way of communicating with the service worker (the service worker can check
@@ -226,11 +220,9 @@ function App() {
   // }, []);
 
   useEffect(() => {
-    console.log("check record ref", chunks);
     if (!recorderRef.current) return;
     if (!isRecording) return;
 
-    console.log("chunks:", chunks);
     if (chunks.length > 0) {
       // Generate from data
       const blob = new Blob(chunks, { type: recorderRef.current.mimeType });
@@ -238,7 +230,6 @@ function App() {
       const fileReader = new FileReader();
 
       fileReader.onloadend = async () => {
-        console.log("file load end");
         const arrayBuffer = fileReader.result;
         const decoded = await audioContextRef.current?.decodeAudioData(arrayBuffer);
         let audio = decoded.getChannelData(0);
