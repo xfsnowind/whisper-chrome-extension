@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       '@huggingface/transformers':
-        specifier: ^3.0.0-alpha.19
-        version: 3.0.0-alpha.20
+        specifier: ^3.0.0
+        version: 3.0.0
       lucide-react:
         specifier: ^0.344.0
         version: 0.344.0(react@18.3.1)
@@ -352,8 +352,8 @@ packages:
     resolution: {integrity: sha512-SbcBWUKDQ76lzlVYOloscUk0SJjuL1LcbZsfQv/Bxxc7dwJMYuS+DAQ+HhVw6ZkTFXArejaX5HQRuCuleYwYdA==}
     engines: {node: '>=18'}
 
-  '@huggingface/transformers@3.0.0-alpha.20':
-    resolution: {integrity: sha512-YQR1BlCXuBR1AAGVvP42QInUJ3a2ewVFYnvUVkkccgkU8dtc1ykX4YOETtsHcuomFqF3gdM/PanBJ3Xtt3dxEA==}
+  '@huggingface/transformers@3.0.0':
+    resolution: {integrity: sha512-OWIPnTijAw4DQ+IFHBOrej2SDdYyykYlTtpTLCEt5MZq/e9Cb65RS2YVhdGcgbaW/6JAL3i8ZA5UhDeWGm4iRQ==}
 
   '@humanfs/core@0.19.0':
     resolution: {integrity: sha512-2cbWIHbZVEweE853g8jymffCA+NCMiuqeECeBBLm8dg2oFdjuGJhgN4UAbI+6v0CKbbhvtXA4qV8YR5Ji86nmw==}
@@ -1271,15 +1271,15 @@ packages:
   onnxruntime-common@1.19.2:
     resolution: {integrity: sha512-a4R7wYEVFbZBlp0BfhpbFWqe4opCor3KM+5Wm22Az3NGDcQMiU2hfG/0MfnBs+1ZrlSGmlgWeMcXQkDk1UFb8Q==}
 
-  onnxruntime-common@1.20.0-dev.20240928-1bda91fc57:
-    resolution: {integrity: sha512-kYbltZGxJOkKGnxQLqHBS0pI8w1JYT/2TUjw7phRCsS4O8WM4ajjVTggiRMzHy06EBhzDRY+HPiHD27JYHAwkw==}
+  onnxruntime-common@1.20.0-dev.20241016-2b8fc5529b:
+    resolution: {integrity: sha512-KZK8b6zCYGZFjd4ANze0pqBnqnFTS3GIVeclQpa2qseDpXrCQJfkWBixRcrZShNhm3LpFOZ8qJYFC5/qsJK9WQ==}
 
   onnxruntime-node@1.19.2:
     resolution: {integrity: sha512-9eHMP/HKbbeUcqte1JYzaaRC8JPn7ojWeCeoyShO86TOR97OCyIyAIOGX3V95ErjslVhJRXY8Em/caIUc0hm1Q==}
     os: [win32, darwin, linux]
 
-  onnxruntime-web@1.20.0-dev.20240928-1bda91fc57:
-    resolution: {integrity: sha512-+C1OoHISjk4+3HJRsITBauYD3LRJfUAaT4Y6N1XHzUwhZ21+Xq+3RIAd89CJurfSEtHii6Q8sPhTKPxLwyHndA==}
+  onnxruntime-web@1.20.0-dev.20241016-2b8fc5529b:
+    resolution: {integrity: sha512-1XovqtgqeEFtupuyzdDQo7Tqj4GRyNHzOoXjapCEo4rfH3JrXok5VtqucWfRXHPsOI5qoNxMQ9VE+drDIp6woQ==}
 
   optionator@0.9.4:
     resolution: {integrity: sha512-6IpQ7mKUxRcZNLIObR0hz7lxsapSSIYNZJwXPGeF0mTVqGKFIXj1DQcMoT22S3ROcLyY/rz0PWaWZ9ayWmad9g==}
@@ -1897,11 +1897,11 @@ snapshots:
 
   '@huggingface/jinja@0.3.1': {}
 
-  '@huggingface/transformers@3.0.0-alpha.20':
+  '@huggingface/transformers@3.0.0':
     dependencies:
       '@huggingface/jinja': 0.3.1
       onnxruntime-node: 1.19.2
-      onnxruntime-web: 1.20.0-dev.20240928-1bda91fc57
+      onnxruntime-web: 1.20.0-dev.20241016-2b8fc5529b
       sharp: 0.33.5
 
   '@humanfs/core@0.19.0': {}
@@ -2762,19 +2762,19 @@ snapshots:
 
   onnxruntime-common@1.19.2: {}
 
-  onnxruntime-common@1.20.0-dev.20240928-1bda91fc57: {}
+  onnxruntime-common@1.20.0-dev.20241016-2b8fc5529b: {}
 
   onnxruntime-node@1.19.2:
     dependencies:
       onnxruntime-common: 1.19.2
       tar: 7.4.3
 
-  onnxruntime-web@1.20.0-dev.20240928-1bda91fc57:
+  onnxruntime-web@1.20.0-dev.20241016-2b8fc5529b:
     dependencies:
       flatbuffers: 1.12.0
       guid-typescript: 1.0.9
       long: 5.2.3
-      onnxruntime-common: 1.20.0-dev.20240928-1bda91fc57
+      onnxruntime-common: 1.20.0-dev.20241016-2b8fc5529b
       platform: 1.3.6
       protobufjs: 7.4.0
 

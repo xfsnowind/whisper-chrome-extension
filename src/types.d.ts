@@ -1,8 +1,3 @@
-/**
- * Copyright 2024 Google LLC
- * SPDX-License-Identifier: Apache-2.0
- */
-
 export {};
 
 declare global {
@@ -44,5 +39,62 @@ declare global {
     ai: {
       summarizer?: AISummarizer;
     };
+  }
+
+  declare namespace MainPage {
+    type ChromeTab = (typeof chrome.tabs)[number];
+
+    type RecordingCommand = { action: "startCapture"; tab: ChromeTab };
+
+    type AudioTranscribing =
+      | { action: "loadModels" }
+      | { action: "transcribe"; data: Array<number> };
+
+    type MessageToBackground = RecordingCommand | AudioTranscribing;
+  }
+
+  declare namespace Background {
+    type Chunks = { text: string; timestamp: [number, number | null] }[];
+
+    type TranscriberData = {
+      // isBusy: boolean;
+      tps: number;
+      text: string;
+      chunks?: Chunks;
+    };
+
+    type ModelFileProgressItem = {
+      file: string;
+      loaded: number;
+      progress: number;
+      total: number;
+      name: string;
+      status: string;
+    };
+
+    type ModelFileMessage =
+      | (ModelFileProgressItem & { status: "initiate" })
+      | { status: "progress"; progress: number; file: string }
+      | { status: "ready" }
+      | { status: "done"; file: string };
+
+    type TranscrbeMessage =
+      | {
+          chunks: Chunks;
+          tps: number;
+          status: "transcribing";
+        }
+      | { status: "error"; error: Error }
+      | { status: "startAgain" }
+      | { status: "completeChunk"; data: { tps: number; chunks: Array<string> } };
+
+    type RecordTabMessage =
+      | {
+          status: "start-recording-tab";
+          data: string;
+        }
+      | { status: "stop-recording" };
+
+    type MessageToMain = ModelFileMessage | TranscrbeMessage | RecordTabMessage;
   }
 }
