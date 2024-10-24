@@ -199,7 +199,7 @@ export function useAudioTranscriber({ continueRecordingTrigger }: Props) {
         setTranscript(result);
       }
     },
-    [handleTranscribeMessage],
+    [continueRecordingTrigger, handleTranscribeMessage],
   );
 
   return {
