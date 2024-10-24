@@ -1,27 +1,34 @@
-import { useTranscriber } from "./hooks/useTranscriber";
+// import { useTranscriber } from "./hooks/useTranscriber";
 
 import Progress from "./components/Progress";
-import FileTile from "./components/FileTile";
-import FolderIcon from "@/assets/folder-icon.svg";
+// import FileTile from "./components/FileTile";
+// import FolderIcon from "@/assets/folder-icon.svg";
 import { useCallback, useEffect, useRef, useState } from "react";
-import useSummarize from "./hooks/useSummarize";
-import Constants from "./utils/Constants";
-import { useAudioTranscriber } from "./hooks/useRecordTranscriber";
+// import useSummarize from "./hooks/useSummarize";
+import Constants from "./Constants";
+import { match } from "ts-pattern";
 
 const IS_WEBGPU_AVAILABLE = "gpu" in navigator && !!navigator.gpu;
 
+const sendMessageToBackground = chrome.runtime.sendMessage<MainPage.MessageToBackground>;
+
 function App() {
-  const [audioData, setAudioData] = useState<
-    { decoded: AudioBuffer; fileName: string } | undefined
-  >(undefined);
-  const [recordData, setRecordData] = useState<{ decoded: Float32Array } | undefined>(undefined);
+  // const [audioData, setAudioData] = useState<
+  //   { decoded: AudioBuffer; fileName: string } | undefined
+  // >(undefined);
+  // const [recordData, setRecordData] = useState<{ decoded: Float32Array } | undefined>(undefined);
+
+  const [transcript, setTranscript] = useState<Array<string>>([]);
+
+  // NOTES: model files
+  const [progressItems, setProgressItems] = useState<Array<Background.ModelFileProgressItem>>([]);
+  const [isModelFilesReady, setIsModelFilesReady] = useState(false);
 
   // const [isRecording, setIsRecording] = useState(false);
-  // const [videoUrl, setVideoUrl] = useState<string | null>(null);
   const [isValidUrl, setIsValidUrl] = useState(true);
-  const [tab, setTab] = useState<chrome.tabs | null>(null);
+  const [tab, setTab] = useState<MainPage.ChromeTab | null>(null);
 
-  //record
+  // NOTES: record
   const [isRecording, setIsRecording] = useState(false);
   const [chunks, setChunks] = useState<Array<Blob>>([]);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -29,13 +36,6 @@ function App() {
 
   // const { transcript, isBusy, start, initialize, progressItems, isModelFilesReady } =
   //   useTranscriber();
-
-  const { transcript, isBusy, start, initialize, progressItems, isModelFilesReady } =
-    useAudioTranscriber({
-      continueRecordingTrigger: () => {
-        recorderRef.current?.requestData();
-      },
-    });
 
   // const { initializeApplication } = useSummarize();
 
@@ -45,63 +45,9 @@ function App() {
   //   }
   // }, [initializeApplication, isBusy, transcript]);
 
-  console.log("transcript:", transcript?.chunks);
+  console.log("transcript:", transcript);
 
-  useEffect(() => {
-    chrome.runtime.onMessage.addListener((request) => {
-      if (request.type === "start-recording") {
-        startRecording(request.data);
-      }
-    });
-
-    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-      const currentTab = tabs[0];
-      setTab(currentTab);
-      setIsValidUrl(!currentTab.url?.startsWith("chrome://"));
-    });
-  }, []);
-
-  // const setAudioFromRecording = useCallback(async (data: Blob) => {
-  //   resetAudio();
-  //   setProgress(0);
-  //   const blobUrl = URL.createObjectURL(data);
-  //   const fileReader = new FileReader();
-  //   fileReader.onprogress = (event) => {
-  //     setProgress(event.loaded / event.total || 0);
-  //   };
-  //   fileReader.onloadend = async () => {
-  //     const audioCTX = new AudioContext({
-  //       sampleRate: Constants.SAMPLING_RATE,
-  //     });
-  //     const arrayBuffer = fileReader.result as ArrayBuffer;
-  //     const decoded = await audioCTX.decodeAudioData(arrayBuffer);
-  //     setProgress(undefined);
-  //     setAudioData({
-  //       decoded,
-  //       // url: blobUrl,
-  //       // mimeType: data.type,
-  //     });
-  //   };
-  //   fileReader.readAsArrayBuffer(data);
-  // }, []);
-
-  const startCapture = () => {
-    chrome.runtime.sendMessage({ action: "startCapture", tab: tab });
-    // setIsRecording(true);
-  };
-
-  const stopCapture = () => {
-    // chrome.runtime.sendMessage({ action: "stopCapture" });
-    recorderRef.current?.stop();
-
-    // Stopping the tracks makes sure the recording icon in the tab is removed.
-    recorderRef.current?.stream.getTracks().forEach((t) => t.stop());
-
-    recorderRef.current = null;
-  };
-
-  const startRecording = useCallback(async (streamId: number) => {
-    // chrome.runtime.sendMessage({ action: "startCapture", tab: tab });
+  const startRecording = useCallback(async (streamId: string) => {
     if (recorderRef.current?.state === "recording") {
       throw new Error("Called startRecording while recording is in progress.");
     }
@@ -149,75 +95,73 @@ function App() {
       setIsRecording(false);
     };
     recorderRef.current.start();
-
-    // // Record the current state in the URL. This provides a very low-bandwidth
-    // // way of communicating with the service worker (the service worker can check
-    // // the URL of the document and see the current recording state). We can't
-    // // store that directly in the service worker as it may be terminated while
-    // // recording is in progress. We could write it to storage but that slightly
-    // // increases the risk of things getting out of sync.
-    // window.location.hash = "recording";
   }, []);
 
-  // async function stopRecording() {
-  //   recorder.stop();
+  useEffect(() => {
+    const receiveMessageFromBackground = (messageFromBg: Background.MessageToMain) => {
+      match(messageFromBg)
+        .with({ status: "start-recording-tab" }, ({ data: streamId }) => {
+          console.log("receive streamId:", streamId);
+          startRecording(streamId);
+        })
+        .with({ status: "startAgain" }, () => {
+          recorderRef.current?.requestData();
+        })
+        .with({ status: "completeChunk" }, ({ data }) => {
+          setTranscript(data.chunks);
+        })
+        // model files
+        .with({ status: "initiate" }, (data) => {
+          setProgressItems((prev) => [...prev, data]);
+        })
+        .with({ status: "progress" }, ({ progress, file }) => {
+          // Model file progress: update one of the progress items.
+          setProgressItems((prev) =>
+            prev.map((item) => {
+              if (item.file === file) {
+                return { ...item, progress, file };
+              }
+              return item;
+            }),
+          );
+        })
+        .with({ status: "done" }, ({ file }) => {
+          // Model file loaded: remove the progress item from the list.
+          setProgressItems((prev) => prev.filter((item) => item.file !== file));
+        })
+        .with({ status: "ready" }, () => {
+          setIsModelFilesReady(true);
+        });
+    };
 
-  //   // Stopping the tracks makes sure the recording icon in the tab is removed.
-  //   recorder.stream.getTracks().forEach((t) => t.stop());
+    chrome.runtime.onMessage.addListener(receiveMessageFromBackground);
 
-  //   // Update current state in URL
-  //   window.location.hash = "";
+    chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+      const currentTab = tabs[0];
+      setTab(currentTab);
+      setIsValidUrl(!currentTab.url?.startsWith("chrome://"));
+    });
 
-  //   // Note: In a real extension, you would want to write the recording to a more
-  //   // permanent location (e.g IndexedDB) and then close the offscreen document,
-  //   // to avoid keeping a document around unnecessarily. Here we avoid that to
-  //   // make sure the browser keeps the Object URL we create (see above) and to
-  //   // keep the sample fairly simple to follow.
-  // }
+    return () => {
+      chrome.runtime.onMessage.removeListener(receiveMessageFromBackground);
+    };
+  }, [startRecording]);
 
-  // useEffect(() => {
-  //   if (recorderRef.current) return; // Already set
+  const startCapture = () => {
+    if (tab) {
+      sendMessageToBackground({ action: "startCapture", tab });
+    }
+    // setIsRecording(true);
+  };
 
-  //   if (navigator.mediaDevices.getUserMedia) {
-  //     navigator.mediaDevices
-  //       .getUserMedia({ audio: true })
-  //       .then((stream) => {
-  //         // setStream(stream);
+  const stopCapture = () => {
+    recorderRef.current?.stop();
 
-  //         recorderRef.current = new MediaRecorder(stream);
-  //         audioContextRef.current = new AudioContext({
-  //           sampleRate: Constants.WHISPER_SAMPLING_RATE,
-  //         });
+    // Stopping the tracks makes sure the recording icon in the tab is removed.
+    recorderRef.current?.stream.getTracks().forEach((t) => t.stop());
 
-  //         recorderRef.current.onstart = () => {
-  //           setRecording(true);
-  //           setChunks([]);
-  //         };
-  //         recorderRef.current.ondataavailable = (e) => {
-  //           if (e.data.size > 0) {
-  //             setChunks((prev) => [...prev, e.data]);
-  //           } else {
-  //             // Empty chunk received, so we request new data after a short timeout
-  //             setTimeout(() => {
-  //               recorderRef.current?.requestData();
-  //             }, 25);
-  //           }
-  //         };
-
-  //         recorderRef.current.onstop = () => {
-  //           setRecording(false);
-  //         };
-  //       })
-  //       .catch((err) => console.error("The following error occurred: ", err));
-  //   } else {
-  //     console.error("getUserMedia not supported on your browser!");
-  //   }
-
-  //   return () => {
-  //     recorderRef.current?.stop();
-  //     recorderRef.current = null;
-  //   };
-  // }, []);
+    recorderRef.current = null;
+  };
 
   useEffect(() => {
     if (!recorderRef.current) return;
@@ -231,15 +175,21 @@ function App() {
 
       fileReader.onloadend = async () => {
         const arrayBuffer = fileReader.result;
-        const decoded = await audioContextRef.current?.decodeAudioData(arrayBuffer);
-        let audio = decoded.getChannelData(0);
-        if (audio.length > Constants.MAX_SAMPLES) {
-          // Get last MAX_SAMPLES
-          audio = audio.slice(-Constants.MAX_SAMPLES);
-        }
+        if (arrayBuffer) {
+          const decoded = await audioContextRef.current?.decodeAudioData(
+            arrayBuffer as ArrayBuffer,
+          );
+          if (decoded) {
+            let audio = decoded.getChannelData(0);
+            if (audio.length > Constants.MAX_SAMPLES) {
+              // Get last MAX_SAMPLES
+              audio = audio.slice(-Constants.MAX_SAMPLES);
+            }
 
-        // setRecordData({ decoded: audio });
-        start(audio);
+            const serializedAudioData = Array.from(audio);
+            sendMessageToBackground({ data: serializedAudioData, action: "transcribe" });
+          }
+        }
       };
       fileReader.readAsArrayBuffer(blob);
     } else {
@@ -253,14 +203,14 @@ function App() {
         {isModelFilesReady ? (
           <div className="flex flex-col items-center justify-between mb-4">
             Model files loaded
-            <FileTile
+            {/* <FileTile
               iconStr={FolderIcon}
               text="From file"
               onFileUpdate={(props) => {
                 setAudioData(props);
               }}
             />
-            {/* {audioData && (
+             {audioData && (
               <div className="flex flex-col items-center justify-between mb-4">
                 File Name: {audioData.fileName}
                 <button
@@ -300,7 +250,7 @@ function App() {
         ) : (
           <button
             className="text-white bg-blue-700 hover:bg-blue-800 focus:ring-4 focus:ring-blue-300 font-medium rounded-lg text-sm px-5 py-2.5 text-center mr-2 dark:bg-blue-600 dark:hover:bg-blue-700 dark:focus:ring-blue-800 inline-flex items-center"
-            onClick={initialize}
+            onClick={() => sendMessageToBackground({ action: "loadModels" })}
           >
             Load Models
           </button>

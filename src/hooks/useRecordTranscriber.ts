@@ -11,8 +11,7 @@ import {
 } from "@huggingface/transformers";
 import { useCallback, useState } from "react";
 import { match } from "ts-pattern";
-import { ModelFileMessage, ModelFileProgressItem, TranscrbeMessage } from "./type";
-import Constants from "../utils/Constants";
+import Constants from "../Constants";
 
 class AutomaticSpeechRecognitionPipeline {
   static model_id: string | null = null;
@@ -20,7 +19,7 @@ class AutomaticSpeechRecognitionPipeline {
   static processor: Promise<Processor> | null = null;
   static model: Promise<PreTrainedModel> | null = null;
 
-  static async getInstance(progress_callback?: (data: ModelFileMessage) => void) {
+  static async getInstance(progress_callback?: (data: Background.ModelFileMessage) => void) {
     this.model_id = "onnx-community/whisper-base";
 
     this.tokenizer = AutoTokenizer.from_pretrained(this.model_id, {
@@ -49,7 +48,7 @@ const transcribeRecord = async ({
   continueRecordingTrigger,
 }: Props & {
   audio: AudioPipelineInputs;
-  handleTranscribeMessage: (message: TranscrbeMessage) => void;
+  handleTranscribeMessage: (message: Background.TranscrbeMessage) => void;
 }) => {
   const [tokenizer, processor, model] = await AutomaticSpeechRecognitionPipeline.getInstance();
 
@@ -60,7 +59,7 @@ const transcribeRecord = async ({
   const streamer = new TextStreamer(tokenizer, {
     skip_prompt: true,
     skip_special_tokens: true,
-    callback_function: (output: any) => {
+    callback_function: (output: Background.Chunks) => {
       startTime ??= performance.now();
 
       if (numTokens++ > 0) {
@@ -94,7 +93,7 @@ const transcribeRecord = async ({
 const loadModelFiles = async ({
   handleModelFilesMessage,
 }: {
-  handleModelFilesMessage: (message: ModelFileMessage) => void;
+  handleModelFilesMessage: (message: Background.ModelFileMessage) => void;
 }) => {
   // Load the pipeline and save it for future use.
   // We also add a progress callback to the pipeline so that we can
@@ -127,10 +126,10 @@ export function useAudioTranscriber({ continueRecordingTrigger }: Props) {
     | undefined
   >(undefined);
   const [isModelFilesReady, setIsModelFilesReady] = useState(false);
-  const [progressItems, setProgressItems] = useState<Array<ModelFileProgressItem>>([]);
+  const [progressItems, setProgressItems] = useState<Array<Background.ModelFileProgressItem>>([]);
   const [isBusy, setIsBusy] = useState(false);
 
-  const handleModelFilesMessage = useCallback((message: ModelFileMessage) => {
+  const handleModelFilesMessage = useCallback((message: Background.ModelFileMessage) => {
     match(message)
       .with({ status: "initiate" }, (msg) => {
         // Model file start load: add a new progress item to the list.
@@ -152,16 +151,20 @@ export function useAudioTranscriber({ continueRecordingTrigger }: Props) {
         // Model file loaded: remove the progress item from the list.
         setProgressItems((prev) => prev.filter((item) => item.file !== msg.file));
       })
-      .with({ status: "ready" }, (msg) => {
+      .with({ status: "ready" }, () => {
         // all the model files are ready
         setIsModelFilesReady(true);
       })
       .otherwise(() => null);
   }, []);
 
-  const handleTranscribeMessage = useCallback((message: TranscrbeMessage) => {
+  const handleTranscribeMessage = useCallback((message: Background.TranscrbeMessage) => {
     match(message)
-      .with({ status: "transcribing" }, (msg) => {
+      .with({ status: "startAgain" }, { status: "completeChunk" }, () => {
+        // sendMessageToMain(msg);
+        return null;
+      })
+      .with({ status: "transcribing" }, () => {
         // transcribing the file
         //   setTranscript({
         //     isBusy: true,
