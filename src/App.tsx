@@ -7,6 +7,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 // import useSummarize from "./hooks/useSummarize";
 import Constants from "./Constants";
 import { match } from "ts-pattern";
+import LanguageSelector from "./components/LanguageSelector";
 
 const IS_WEBGPU_AVAILABLE = "gpu" in navigator && !!navigator.gpu;
 
@@ -23,10 +24,12 @@ function App() {
   // NOTES: model files
   const [progressItems, setProgressItems] = useState<Array<Background.ModelFileProgressItem>>([]);
   const [isModelFilesReady, setIsModelFilesReady] = useState(false);
+  const [isCheckingModels, setIsCheckingModels] = useState(true);
 
   // const [isRecording, setIsRecording] = useState(false);
   const [isValidUrl, setIsValidUrl] = useState(true);
   const [tab, setTab] = useState<MainPage.ChromeTab | null>(null);
+  const [selectedLanguage, setSelectedLanguage] = useState("english");
 
   // NOTES: record
   const [isRecording, setIsRecording] = useState(false);
@@ -46,6 +49,24 @@ function App() {
   // }, [initializeApplication, isBusy, transcript]);
 
   console.log("transcript:", transcript);
+
+  // check if the model files have been downloaded
+  useEffect(() => {
+    const checkModelStatus = async () => {
+      try {
+        const result = await chrome.storage.local.get("modelsDownloaded");
+        if (result.modelsDownloaded) {
+          setIsModelFilesReady(true);
+        }
+        setIsCheckingModels(false);
+      } catch (error) {
+        console.error("Error checking model status:", error);
+        setIsCheckingModels(false);
+      }
+    };
+
+    checkModelStatus();
+  }, []);
 
   const startRecording = useCallback(async (streamId: string) => {
     if (recorderRef.current?.state === "recording") {
@@ -131,6 +152,7 @@ function App() {
         })
         .with({ status: "ready" }, () => {
           setIsModelFilesReady(true);
+          chrome.storage.local.set({ modelsDownloaded: true });
         });
     };
 
@@ -187,7 +209,11 @@ function App() {
             }
 
             const serializedAudioData = Array.from(audio);
-            sendMessageToBackground({ data: serializedAudioData, action: "transcribe" });
+            sendMessageToBackground({
+              data: serializedAudioData,
+              action: "transcribe",
+              language: selectedLanguage,
+            });
           }
         }
       };
@@ -203,6 +229,12 @@ function App() {
         {isModelFilesReady ? (
           <div className="flex flex-col items-center justify-between mb-4">
             Model files loaded
+            <div className="w-full mb-4">
+              <LanguageSelector
+                value={selectedLanguage}
+                onChange={setSelectedLanguage}
+              />
+            </div>
             {/* <FileTile
               iconStr={FolderIcon}
               text="From file"
@@ -248,12 +280,18 @@ function App() {
             )} */}
           </div>
         ) : (
-          <button
-            className="text-white bg-blue-700 hover:bg-blue-800 focus:ring-4 focus:ring-blue-300 font-medium rounded-lg text-sm px-5 py-2.5 text-center mr-2 dark:bg-blue-600 dark:hover:bg-blue-700 dark:focus:ring-blue-800 inline-flex items-center"
-            onClick={() => sendMessageToBackground({ action: "loadModels" })}
-          >
-            Load Models
-          </button>
+          <div className="w-full text-center">
+            {isCheckingModels ? (
+              <div className="animate-pulse text-gray-600">Checking model status...</div>
+            ) : (
+              <button
+                className="text-white bg-blue-700 hover:bg-blue-800 focus:ring-4 focus:ring-blue-300 font-medium rounded-lg text-sm px-5 py-2.5 text-center mr-2 dark:bg-blue-600 dark:hover:bg-blue-700 dark:focus:ring-blue-800 inline-flex items-center"
+                onClick={() => sendMessageToBackground({ action: "loadModels" })}
+              >
+                Load Models
+              </button>
+            )}
+          </div>
         )}
 
         {progressItems.length > 0 && (

@@ -5,6 +5,7 @@ import {
   PreTrainedModel,
   PreTrainedTokenizer,
   Processor,
+  Tensor,
   TextStreamer,
   WhisperForConditionalGeneration,
   full,
@@ -80,6 +81,8 @@ const loadModelFiles = async () => {
   // Load the pipeline and save it for future use.
   // We also add a progress callback to the pipeline so that we can
   // track model loading.
+
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [_tokenizer, _processor, model] =
     await AutomaticSpeechRecognitionPipeline.getInstance(handleModelFilesMessage);
 
@@ -87,9 +90,6 @@ const loadModelFiles = async () => {
   await model.generate({
     input_features: full([1, 80, 3000], 0.0),
     max_new_tokens: 1,
-    generation_config: {
-      language: "chinese",
-    },
   });
 
   handleModelFilesMessage({ status: "ready" });
@@ -120,7 +120,13 @@ const handleTranscribeMessage = (message: Background.TranscrbeMessage) => {
     .exhaustive();
 };
 
-const transcribeRecord = async ({ audio }: { audio: AudioPipelineInputs }) => {
+const transcribeRecord = async ({
+  audio,
+  language,
+}: {
+  audio: AudioPipelineInputs;
+  language: string;
+}) => {
   const [tokenizer, processor, model] = await AutomaticSpeechRecognitionPipeline.getInstance();
 
   let startTime;
@@ -149,14 +155,14 @@ const transcribeRecord = async ({ audio }: { audio: AudioPipelineInputs }) => {
   const outputs = await model.generate({
     ...inputs,
     max_new_tokens: Constants.MAX_NEW_TOKENS,
-    language: "chinese",
+    language,
     streamer,
   });
 
   // NOTES: should be triggered after generate to request the new data
   handleTranscribeMessage({ status: "startAgain" });
 
-  const outputText = tokenizer.batch_decode(outputs, { skip_special_tokens: true });
+  const outputText = tokenizer.batch_decode(outputs as Tensor, { skip_special_tokens: true });
   return { chunks: outputText, tps };
 };
 
@@ -207,10 +213,11 @@ chrome.runtime.onMessage.addListener((request: MainPage.MessageToBackground, sen
     .with({ action: "loadModels" }, () => {
       loadModelFiles();
     })
-    .with({ action: "transcribe" }, async ({ data }) => {
+    .with({ action: "transcribe" }, async ({ data, language }) => {
       const audioData = new Float32Array(data);
       const result = await transcribeRecord({
         audio: audioData as AudioPipelineInputs,
+        language,
       });
 
       if (result === null) return;

@@ -48,7 +48,7 @@ declare global {
 
     type AudioTranscribing =
       | { action: "loadModels" }
-      | { action: "transcribe"; data: Array<number> };
+      | { action: "transcribe"; data: Array<number>; language: string };
 
     type MessageToBackground = RecordingCommand | AudioTranscribing;
   }
