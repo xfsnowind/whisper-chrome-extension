@@ -7,7 +7,7 @@
     "extension_pages": "script-src 'self' 'wasm-unsafe-eval'; object-src 'self'"
   },
   "action": {
-    "default_popup": "index.html",
+    "default_popup": "popup.html",
     "default_icon": {
       "16": "icon16.svg",
       "48": "icon48.svg",
@@ -18,10 +18,27 @@
     "service_worker": "background.js",
     "type": "module"
   },
-  "permissions": ["storage", "tabCapture", "offscreen"],
+  "permissions": [
+    "storage",
+    "tabCapture",
+    "offscreen"
+  ],
   "icons": {
     "16": "icon16.svg",
     "48": "icon48.svg",
     "128": "icon128.svg"
-  }
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.youtube.com/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "css": [
+        "style.css"
+      ]
+    }
+  ]
 }

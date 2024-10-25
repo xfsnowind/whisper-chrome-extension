@@ -9,6 +9,15 @@
       height: 600px;
       /* Set the height of the popup */
     }
+
+    #chatInput {
+      width: 100%;
+      margin-top: 10px;
+    }
+
+    #sendButton {
+      margin-top: 5px;
+    }
   </style>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -18,6 +27,11 @@
 <body>
   <div id="root"></div>
   <script type="module" src="/src/main.tsx"></script>
+  <p>Click the button below to toggle the transcript sidebar.</p>
+  <button id="toggleButton">Toggle Transcript</button>
+  <textarea id="chatInput" rows="3" placeholder="Chat with AI about the video..."></textarea>
+  <button id="sendButton">Send</button>
+  <script src="popup.js"></script>
 </body>
 
 </html>

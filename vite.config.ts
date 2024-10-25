@@ -7,13 +7,39 @@ export default defineConfig({
   plugins: [
     react(),
     {
-      name: "copy-manifest",
+      name: "copy-files",
       buildStart() {
+        // Copy manifest.json
         this.emitFile({
           type: "asset",
           fileName: "manifest.json",
           source: fs.readFileSync("manifest.json", "utf-8"),
         });
+        // Copy content.js from src directory
+        this.emitFile({
+          type: "asset",
+          fileName: "content.js",
+          source: fs.readFileSync("src/content.js", "utf-8"),
+        });
+        // Copy styles.css if it exists
+        try {
+          this.emitFile({
+            type: "asset",
+            fileName: "style.css",
+            source: fs.readFileSync("src/style.css", "utf-8"),
+          });
+        } catch (error) {
+          console.warn("styles.css not found, skipping...");
+        }
+        try {
+          this.emitFile({
+            type: "asset",
+            fileName: "popup.js",
+            source: fs.readFileSync("popup.js", "utf-8"),
+          });
+        } catch (error) {
+          console.warn("styles.css not found, skipping...");
+        }
       },
     },
   ],
@@ -21,8 +47,8 @@ export default defineConfig({
     outDir: "dist",
     rollupOptions: {
       input: {
-        main: resolve(__dirname, "index.html"),
-        background: "src/background.ts",
+        main: resolve(__dirname, "popup.html"),
+        background: resolve(__dirname, "src/background.ts"),
       },
       output: {
         entryFileNames: "[name].js",
