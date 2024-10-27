@@ -53,6 +53,7 @@ declare global {
       | { action: "stopCapture" };
 
     type AudioTranscribing =
+      | { action: "checkModelsLoaded" }
       | { action: "loadModels" }
       | { action: "transcribe"; data: Array<number>; language: string };
 
@@ -78,6 +79,7 @@ declare global {
     };
 
     type ModelFileMessage =
+      | { status: "modelsLoaded"; result: boolean }
       | (ModelFileProgressItem & { status: "initiate" })
       | { status: "progress"; progress: number; file: string }
       | { status: "ready" }

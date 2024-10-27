@@ -22,24 +22,16 @@ export default defineConfig({
           source: fs.readFileSync("src/content.js", "utf-8"),
         });
         // Copy styles.css if it exists
-        try {
-          this.emitFile({
-            type: "asset",
-            fileName: "style.css",
-            source: fs.readFileSync("src/style.css", "utf-8"),
-          });
-        } catch {
-          console.warn("styles.css not found, skipping...");
-        }
-        try {
-          this.emitFile({
-            type: "asset",
-            fileName: "popup.js",
-            source: fs.readFileSync("popup.js", "utf-8"),
-          });
-        } catch {
-          console.warn("styles.css not found, skipping...");
-        }
+        this.emitFile({
+          type: "asset",
+          fileName: "style.css",
+          source: fs.readFileSync("src/style.css", "utf-8"),
+        });
+        this.emitFile({
+          type: "asset",
+          fileName: "popup.js",
+          source: fs.readFileSync("popup.js", "utf-8"),
+        });
       },
     },
   ],

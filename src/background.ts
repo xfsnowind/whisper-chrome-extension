@@ -6,12 +6,42 @@ import {
   PreTrainedTokenizer,
   Processor,
   Tensor,
+  pipeline,
   TextStreamer,
   WhisperForConditionalGeneration,
   full,
+  env,
 } from "@huggingface/transformers";
 import Constants from "./Constants";
 import { match } from "ts-pattern";
+
+const model = "onnx-community/whisper-base";
+
+async function checkModelsLoaded() {
+  try {
+    // Load the pipeline for automatic speech recognition
+    const asrPipeline = await pipeline("automatic-speech-recognition", model, {
+      dtype: {
+        encoder_model: "fp32",
+        // encoder_model: model === "onnx-community/whisper-large-v3-turbo" ? "fp16" : "fp32",
+        decoder_model_merged: "q4", // or 'fp32' ('fp16' is broken)
+      },
+      device: "webgpu",
+    });
+
+    // Assuming you have an audio input as a Float32Array or other valid format
+    const audioInput = new Float32Array([0.0, 0.1, 0.15, 0.2, 0.05, -0.05]);
+
+    // Run the speech recognition model on the audio input
+    const transcription = await asrPipeline(audioInput, { language: "english" });
+
+    return !!transcription;
+  } catch (error) {
+    // Handle errors that occur during model loading
+    console.error("Error loading the model:", error);
+    return false;
+  }
+}
 
 /************************************************************** Handle Auido data *****************************************************************/
 
@@ -22,7 +52,7 @@ class AutomaticSpeechRecognitionPipeline {
   static model: Promise<PreTrainedModel> | null = null;
 
   static async getInstance(progress_callback?: (data: Background.ModelFileMessage) => void) {
-    this.model_id = "onnx-community/whisper-base";
+    this.model_id = model;
 
     this.tokenizer = AutoTokenizer.from_pretrained(this.model_id, {
       progress_callback,
@@ -206,12 +236,16 @@ async function startRecordTab(tabId: number) {
 
 chrome.runtime.onMessage.addListener((request: MainPage.MessageToBackground, sender) => {
   match(request)
-    .with({ action: "startCapture" }, ({ tab }) => {
-      console.log("startCapture sender", sender, request);
-      startRecordTab(tab.id);
+    .with({ action: "checkModelsLoaded" }, async () => {
+      const result = await checkModelsLoaded();
+      sendMessageToMain({ status: "modelsLoaded", result });
     })
     .with({ action: "loadModels" }, () => {
       loadModelFiles();
+    })
+    .with({ action: "startCapture" }, ({ tab }) => {
+      console.log("startCapture sender", sender, request);
+      startRecordTab(tab.id);
     })
     .with({ action: "transcribe" }, async ({ data, language }) => {
       const audioData = new Float32Array(data);
@@ -224,5 +258,6 @@ chrome.runtime.onMessage.addListener((request: MainPage.MessageToBackground, sen
 
       sendMessageToMain({ status: "completeChunk", data: result });
     })
+    .with({ action: "stopCapture" }, () => null)
     .exhaustive();
 });

@@ -67,21 +67,11 @@ function App() {
 
   // check if the model files have been downloaded
   useEffect(() => {
-    const checkModelStatus = async () => {
-      try {
-        const result = await chrome.storage.local.get("modelsDownloaded");
-        if (result.modelsDownloaded) {
-          setIsModelFilesReady(true);
-        }
-        setIsCheckingModels(false);
-      } catch (error) {
-        console.error("Error checking model status:", error);
-        setIsCheckingModels(false);
-      }
-    };
-
-    checkModelStatus();
+    sendMessageToBackground({ action: "checkModelsLoaded" });
   }, []);
+
+  // when the page unmount, stop the capture
+  useEffect(() => () => stopRecording(), [stopRecording]);
 
   const startRecording = useCallback(async (streamId: string) => {
     if (recorderRef.current?.state === "recording") {
@@ -133,13 +123,6 @@ function App() {
     recorderRef.current.start();
   }, []);
 
-  // when the page unmount, stop the capture
-  useEffect(() => {
-    return () => {
-      stopRecording();
-    };
-  }, [stopRecording]);
-
   // Receive the message from background and handle them
   useEffect(() => {
     const receiveMessageFromBackground = (messageFromBg: Background.MessageToMain) => {
@@ -155,6 +138,10 @@ function App() {
           setTranscript(data.chunks);
         })
         // model files
+        .with({ status: "modelsLoaded" }, (data) => {
+          setIsCheckingModels(false);
+          setIsModelFilesReady(data.result);
+        })
         .with({ status: "initiate" }, (data) => {
           setProgressItems((prev) => [...prev, data]);
         })
