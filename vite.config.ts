@@ -15,12 +15,6 @@ export default defineConfig({
           fileName: "manifest.json",
           source: fs.readFileSync("manifest.json", "utf-8"),
         });
-        // Copy content.js from src directory
-        this.emitFile({
-          type: "asset",
-          fileName: "content.js",
-          source: fs.readFileSync("src/content.js", "utf-8"),
-        });
         // Copy styles.css if it exists
         this.emitFile({
           type: "asset",
@@ -41,7 +35,7 @@ export default defineConfig({
       input: {
         main: resolve(__dirname, "popup.html"),
         background: resolve(__dirname, "src/background.ts"),
-        content: "src/content-script/inject.tsx",
+        content: "src/content.ts",
       },
       output: {
         entryFileNames: "[name].js",
