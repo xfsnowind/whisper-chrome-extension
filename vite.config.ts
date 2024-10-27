@@ -28,7 +28,7 @@ export default defineConfig({
             fileName: "style.css",
             source: fs.readFileSync("src/style.css", "utf-8"),
           });
-        } catch (error) {
+        } catch {
           console.warn("styles.css not found, skipping...");
         }
         try {
@@ -37,7 +37,7 @@ export default defineConfig({
             fileName: "popup.js",
             source: fs.readFileSync("popup.js", "utf-8"),
           });
-        } catch (error) {
+        } catch {
           console.warn("styles.css not found, skipping...");
         }
       },
@@ -49,6 +49,7 @@ export default defineConfig({
       input: {
         main: resolve(__dirname, "popup.html"),
         background: resolve(__dirname, "src/background.ts"),
+        content: "src/content-script/inject.tsx",
       },
       output: {
         entryFileNames: "[name].js",

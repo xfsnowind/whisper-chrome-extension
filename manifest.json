@@ -18,11 +18,7 @@
     "service_worker": "background.js",
     "type": "module"
   },
-  "permissions": [
-    "storage",
-    "tabCapture",
-    "offscreen"
-  ],
+  "permissions": ["storage", "tabCapture", "offscreen"],
   "icons": {
     "16": "icon16.svg",
     "48": "icon48.svg",
@@ -30,15 +26,9 @@
   },
   "content_scripts": [
     {
-      "matches": [
-        "https://www.youtube.com/*"
-      ],
-      "js": [
-        "content.js"
-      ],
-      "css": [
-        "style.css"
-      ]
+      "matches": ["https://www.youtube.com/*"],
+      "js": ["content.js"],
+      "css": ["style.css"]
     }
   ]
 }

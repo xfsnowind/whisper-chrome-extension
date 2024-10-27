@@ -44,7 +44,13 @@ declare global {
   declare namespace MainPage {
     type ChromeTab = (typeof chrome.tabs)[number];
 
-    type RecordingCommand = { action: "startCapture"; tab: ChromeTab };
+    type RecordingCommand =
+      | {
+          action: "startCapture";
+          tab: ChromeTab;
+          language?: string;
+        }
+      | { action: "stopCapture" };
 
     type AudioTranscribing =
       | { action: "loadModels" }
@@ -57,7 +63,6 @@ declare global {
     type Chunks = { text: string; timestamp: [number, number | null] }[];
 
     type TranscriberData = {
-      // isBusy: boolean;
       tps: number;
       text: string;
       chunks?: Chunks;

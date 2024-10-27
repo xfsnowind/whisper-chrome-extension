@@ -26,7 +26,6 @@ function App() {
   const [isModelFilesReady, setIsModelFilesReady] = useState(false);
   const [isCheckingModels, setIsCheckingModels] = useState(true);
 
-  // const [isRecording, setIsRecording] = useState(false);
   const [isValidUrl, setIsValidUrl] = useState(true);
   const [tab, setTab] = useState<MainPage.ChromeTab | null>(null);
   const [selectedLanguage, setSelectedLanguage] = useState("english");
@@ -49,6 +48,22 @@ function App() {
   // }, [initializeApplication, isBusy, transcript]);
 
   console.log("transcript:", transcript);
+
+  const startCaptureAudioTab = useCallback(() => {
+    if (tab) {
+      sendMessageToBackground({ action: "startCapture", tab });
+    }
+    // setIsRecording(true);
+  }, [tab]);
+
+  const stopRecording = useCallback(() => {
+    recorderRef.current?.stop();
+
+    // Stopping the tracks makes sure the recording icon in the tab is removed.
+    recorderRef.current?.stream.getTracks().forEach((t) => t.stop());
+
+    recorderRef.current = null;
+  }, []);
 
   // check if the model files have been downloaded
   useEffect(() => {
@@ -118,6 +133,14 @@ function App() {
     recorderRef.current.start();
   }, []);
 
+  // when the page unmount, stop the capture
+  useEffect(() => {
+    return () => {
+      stopRecording();
+    };
+  }, [stopRecording]);
+
+  // Receive the message from background and handle them
   useEffect(() => {
     const receiveMessageFromBackground = (messageFromBg: Background.MessageToMain) => {
       match(messageFromBg)
@@ -169,22 +192,7 @@ function App() {
     };
   }, [startRecording]);
 
-  const startCapture = () => {
-    if (tab) {
-      sendMessageToBackground({ action: "startCapture", tab });
-    }
-    // setIsRecording(true);
-  };
-
-  const stopCapture = () => {
-    recorderRef.current?.stop();
-
-    // Stopping the tracks makes sure the recording icon in the tab is removed.
-    recorderRef.current?.stream.getTracks().forEach((t) => t.stop());
-
-    recorderRef.current = null;
-  };
-
+  // handle the audio recording
   useEffect(() => {
     if (!recorderRef.current) return;
     if (!isRecording) return;
@@ -221,7 +229,7 @@ function App() {
     } else {
       recorderRef.current?.requestData();
     }
-  }, [isRecording, chunks]);
+  }, [isRecording, chunks, selectedLanguage]);
 
   return IS_WEBGPU_AVAILABLE ? (
     <div className="min-w-64 min-h-32 p-4 bg-white">
@@ -256,14 +264,14 @@ function App() {
             {isRecording ? (
               <button
                 className="text-white bg-blue-700 hover:bg-blue-800 focus:ring-4 my-4 focus:ring-blue-300 font-medium rounded-lg text-sm px-5 py-2.5 text-center mr-2 dark:bg-blue-600 dark:hover:bg-blue-700 dark:focus:ring-blue-800 inline-flex items-center"
-                onClick={() => stopCapture()}
+                onClick={() => stopRecording()}
               >
                 Stop Record
               </button>
             ) : (
               <button
                 className="text-white bg-blue-700 hover:bg-blue-800 focus:ring-4 my-4 focus:ring-blue-300 font-medium rounded-lg text-sm px-5 py-2.5 text-center mr-2 dark:bg-blue-600 dark:hover:bg-blue-700 dark:focus:ring-blue-800 inline-flex items-center"
-                onClick={() => startCapture()}
+                onClick={() => startCaptureAudioTab()}
               >
                 Record
               </button>

@@ -1,8 +1,8 @@
 let transcriptPanel = null;
 
 function createTranscriptPanel() {
-  transcriptPanel = document.createElement('div');
-  transcriptPanel.id = 'yt-transcript-panel';
+  transcriptPanel = document.createElement("div");
+  transcriptPanel.id = "yt-transcript-panel";
   transcriptPanel.style.cssText = `
     position: fixed;
     top: 0;
@@ -23,10 +23,12 @@ function extractTranscript() {
   if (transcriptButton) {
     transcriptButton.click();
     setTimeout(() => {
-      const transcriptItems = document.querySelectorAll('yt-formatted-string.ytd-transcript-segment-renderer');
-      let transcriptText = '';
-      transcriptItems.forEach(item => {
-        transcriptText += item.textContent + '\n\n';
+      const transcriptItems = document.querySelectorAll(
+        "yt-formatted-string.ytd-transcript-segment-renderer",
+      );
+      let transcriptText = "";
+      transcriptItems.forEach((item) => {
+        transcriptText += item.textContent + "\n\n";
       });
       transcriptPanel.innerHTML = `
         <h3>Chat with AI</h3>
@@ -61,16 +63,16 @@ function toggleTranscript() {
 
 function addChatMessage(message, isAI = false) {
   if (transcriptPanel) {
-    const chatMessages = transcriptPanel.querySelector('#chatMessages');
-    const messageElement = document.createElement('p');
-    messageElement.textContent = `${isAI ? 'AI: ' : 'You: '}${message}`;
-    messageElement.style.marginBottom = '5px';
+    const chatMessages = transcriptPanel.querySelector("#chatMessages");
+    const messageElement = document.createElement("p");
+    messageElement.textContent = `${isAI ? "AI: " : "You: "}${message}`;
+    messageElement.style.marginBottom = "5px";
     chatMessages.appendChild(messageElement);
     chatMessages.scrollTop = chatMessages.scrollHeight;
   }
 }
 
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((request) => {
   if (request.action === "toggleTranscript") {
     toggleTranscript();
   } else if (request.action === "sendChatMessage") {
