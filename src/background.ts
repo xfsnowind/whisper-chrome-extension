@@ -10,7 +10,6 @@ import {
   TextStreamer,
   WhisperForConditionalGeneration,
   full,
-  env,
 } from "@huggingface/transformers";
 import Constants from "./Constants";
 import { match } from "ts-pattern";
@@ -180,6 +179,8 @@ const transcribeRecord = async ({
     },
   });
 
+  const d = audio as Float32Array;
+  console.log("audio, ", d.length);
   const inputs = await processor(audio);
 
   const outputs = await model.generate({
@@ -190,9 +191,10 @@ const transcribeRecord = async ({
   });
 
   // NOTES: should be triggered after generate to request the new data
-  handleTranscribeMessage({ status: "startAgain" });
+  // handleTranscribeMessage({ status: "startAgain" });
 
   const outputText = tokenizer.batch_decode(outputs as Tensor, { skip_special_tokens: true });
+  console.log("transcript:", outputText);
   return { chunks: outputText, tps };
 };
 

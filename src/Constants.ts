@@ -2,8 +2,6 @@ const WHISPER_SAMPLING_RATE = 16_000;
 const MAX_AUDIO_LENGTH = 30; // seconds
 
 export default {
-  SAMPLING_RATE: 16000,
-
   DEFAULT_SUBTASK: "transcribe",
   DEFAULT_LANGUAGE: "english",
   DEFAULT_MULTILINGUAL: true,
