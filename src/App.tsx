@@ -57,7 +57,6 @@ function App() {
   const [isValidUrl, setIsValidUrl] = useState(true);
   const [tab, setTab] = useState<MainPage.ChromeTab | null>(null);
   const [selectedLanguage, setSelectedLanguage] = useState("english");
-  const [chunkTime, setChunkTime] = useState(0);
 
   // NOTES: record
   const [isRecording, setIsRecording] = useState(false);
@@ -104,64 +103,52 @@ function App() {
   // when the page unmount, stop the capture
   useEffect(() => () => stopRecording(), [stopRecording]);
 
-  const startRecording = useCallback(
-    async (streamId: string) => {
-      if (recorderRef.current?.state === "recording") {
-        throw new Error("Called startRecording while recording is in progress.");
-      }
+  const startRecording = useCallback(async (streamId: string) => {
+    if (recorderRef.current?.state === "recording") {
+      throw new Error("Called startRecording while recording is in progress.");
+    }
 
-      const media = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          mandatory: {
-            chromeMediaSource: "tab",
-            chromeMediaSourceId: streamId,
-          },
+    const media = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        mandatory: {
+          chromeMediaSource: "tab",
+          chromeMediaSourceId: streamId,
         },
-        // video: {
-        //   mandatory: {
-        //     chromeMediaSource: "tab",
-        //     chromeMediaSourceId: streamId,
-        //   },
-        // },
-      });
+      },
+    });
 
-      // Continue to play the captured audio to the user.
-      audioContextRef.current = new AudioContext({
-        sampleRate: Constants.WHISPER_SAMPLING_RATE,
-      });
-      const source = audioContextRef.current.createMediaStreamSource(media);
-      source.connect(audioContextRef.current.destination);
+    // Continue to play the captured audio to the user.
+    audioContextRef.current = new AudioContext({
+      sampleRate: Constants.WHISPER_SAMPLING_RATE,
+    });
+    const source = audioContextRef.current.createMediaStreamSource(media);
+    source.connect(audioContextRef.current.destination);
 
-      // Start recording.
-      recorderRef.current = new MediaRecorder(media, { mimeType: "audio/webm" });
-      recorderRef.current.onstart = () => {
-        setIsRecording(true);
-        setChunks([]);
-      };
+    // Start recording.
+    recorderRef.current = new MediaRecorder(media, { mimeType: "audio/webm" });
+    recorderRef.current.onstart = () => {
+      setIsRecording(true);
+      setChunks([]);
+    };
 
-      recorderRef.current.ondataavailable = (event) => {
-        if (event.data.size > 0) {
-          const now = Date.now();
-          console.log("interval", chunkTime, (now - chunkTime) / 1000);
-          setChunkTime(now);
-          setChunks((prev) => [...prev, event.data]);
-          // sendAudioDataToBackground(event.data);
-        } else {
-          // Empty chunk received, so we request new data after a short timeout
-          setTimeout(() => {
-            recorderRef.current?.requestData();
-          }, 25);
-        }
-      };
-      recorderRef.current.onstop = () => {
-        console.log("stop");
-        setIsRecording(false);
-      };
+    recorderRef.current.ondataavailable = (event) => {
+      if (event.data.size > 0) {
+        setChunks((prev) => [...prev, event.data]);
+      } else {
+        // Empty chunk received, so we request new data after a short timeout
+        setTimeout(() => {
+          recorderRef.current?.requestData();
+        }, 25);
+      }
+    };
+    recorderRef.current.onstop = () => {
+      console.log("stop");
+      setIsRecording(false);
+    };
 
-      recorderRef.current.start(3000);
-    },
-    [chunkTime],
-  );
+    // NOTE: interval 3s
+    recorderRef.current.start(3000);
+  }, []);
 
   // Receive the message from background and handle them
   useEffect(() => {
@@ -254,7 +241,6 @@ function App() {
 
       fileReader.readAsArrayBuffer(blob);
     } else {
-      console.log("request data");
       recorderRef.current?.requestData();
     }
   }, [isRecording, chunks, selectedLanguage]);
