@@ -14,7 +14,7 @@ import {
 import Constants from "./Constants";
 import { match } from "ts-pattern";
 
-const model = "onnx-community/whisper-base";
+const model = "onnx-community/whisper-large-v2";
 
 async function checkModelsLoaded() {
   try {
