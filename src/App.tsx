@@ -14,9 +14,6 @@ const IS_WEBGPU_AVAILABLE = "gpu" in navigator && !!navigator.gpu;
 const sendMessageToBackground = chrome.runtime.sendMessage<MainPage.MessageToBackground>;
 
 class AudioStreamManager {
-  private static CHUNK_LENGTH = Constants.WHISPER_SAMPLING_RATE * 30; // 30 seconds of audio
-  private static OVERLAP_LENGTH = Constants.WHISPER_SAMPLING_RATE * 5; // 5 seconds overlap
-
   private audioBuffer: Float32Array;
   private lastProcessedIndex: number;
 
@@ -27,6 +24,7 @@ class AudioStreamManager {
 
   addAudio(newAudio: Float32Array) {
     const audioLength = newAudio.length;
+    console.log("add audio:", audioLength, this.lastProcessedIndex);
     if (audioLength > this.lastProcessedIndex) {
       try {
         const newBuffer = new Float32Array(audioLength - this.lastProcessedIndex);
@@ -40,22 +38,6 @@ class AudioStreamManager {
     }
 
     return this.audioBuffer;
-
-    // // Process chunks if we have enough data
-    // if (this.audioBuffer.length >= AudioStreamManager.CHUNK_LENGTH) {
-    //   const chunk = this.audioBuffer.slice(
-    //     this.lastProcessedIndex,
-    //     this.lastProcessedIndex + AudioStreamManager.CHUNK_LENGTH,
-    //   );
-
-    //   // Move the processing index forward, keeping overlap
-    //   this.lastProcessedIndex +=
-    //     AudioStreamManager.CHUNK_LENGTH - AudioStreamManager.OVERLAP_LENGTH;
-
-    //   return chunk;
-    // }
-
-    // return this.audioBuffer;
   }
 
   clear() {
@@ -65,11 +47,6 @@ class AudioStreamManager {
 }
 
 function App() {
-  // const [audioData, setAudioData] = useState<
-  //   { decoded: AudioBuffer; fileName: string } | undefined
-  // >(undefined);
-  // const [recordData, setRecordData] = useState<{ decoded: Float32Array } | undefined>(undefined);
-
   const [transcript, setTranscript] = useState<Array<string>>([]);
 
   // NOTES: model files
@@ -80,6 +57,7 @@ function App() {
   const [isValidUrl, setIsValidUrl] = useState(true);
   const [tab, setTab] = useState<MainPage.ChromeTab | null>(null);
   const [selectedLanguage, setSelectedLanguage] = useState("english");
+  const [chunkTime, setChunkTime] = useState(0);
 
   // NOTES: record
   const [isRecording, setIsRecording] = useState(false);
@@ -88,9 +66,6 @@ function App() {
   const recorderRef = useRef<MediaRecorder | null>(null);
   const audioStreamManagerRef = useRef<AudioStreamManager | null>(null);
   // const blobChunksRef = useRef<Array<Blob>>([]);
-
-  // const { transcript, isBusy, start, initialize, progressItems, isModelFilesReady } =
-  //   useTranscriber();
 
   // const { initializeApplication } = useSummarize();
 
@@ -107,7 +82,6 @@ function App() {
       audioStreamManagerRef.current = new AudioStreamManager();
       sendMessageToBackground({ action: "startCapture", tab });
     }
-    // setIsRecording(true);
   }, [tab]);
 
   const stopRecording = useCallback(() => {
@@ -122,49 +96,6 @@ function App() {
     setChunks([]);
   }, []);
 
-  // const sendAudioDataToBackground = useCallback(
-  //   (chunkBlob: Blob) => {
-  //     console.log(recorderRef.current, isRecording);
-  //     if (!recorderRef.current) return;
-  //     // if (!isRecording) return;
-
-  //     // Generate from data
-  //     const blob = new Blob([chunkBlob], { type: recorderRef.current.mimeType });
-  //     console.log("chunks", chunkBlob);
-  //     // setChunks([]);
-
-  //     const fileReader = new FileReader();
-
-  //     fileReader.onloadend = async () => {
-  //       const arrayBuffer = fileReader.result;
-  //       if (arrayBuffer) {
-  //         let decoded: AudioBuffer | undefined;
-  //         try {
-  //           decoded = await audioContextRef.current?.decodeAudioData(arrayBuffer as ArrayBuffer);
-  //         } catch (error) {
-  //           console.log("error", error);
-  //         }
-  //         console.log("decoded", decoded);
-
-  //         if (decoded) {
-  //           const audio = decoded.getChannelData(0);
-  //           const audioChunk = audioStreamManagerRef.current?.addAudio(audio);
-  //           if (audioChunk) {
-  //             const serializedAudioData = Array.from(audioChunk);
-  //             sendMessageToBackground({
-  //               data: serializedAudioData,
-  //               action: "transcribe",
-  //               language: selectedLanguage,
-  //             });
-  //           }
-  //         }
-  //       }
-  //     };
-  //     fileReader.readAsArrayBuffer(blob);
-  //   },
-  //   [isRecording, selectedLanguage],
-  // );
-
   // check if the model files have been downloaded
   useEffect(() => {
     sendMessageToBackground({ action: "checkModelsLoaded" });
@@ -173,59 +104,64 @@ function App() {
   // when the page unmount, stop the capture
   useEffect(() => () => stopRecording(), [stopRecording]);
 
-  const startRecording = useCallback(async (streamId: string) => {
-    if (recorderRef.current?.state === "recording") {
-      throw new Error("Called startRecording while recording is in progress.");
-    }
-
-    const media = await navigator.mediaDevices.getUserMedia({
-      audio: {
-        mandatory: {
-          chromeMediaSource: "tab",
-          chromeMediaSourceId: streamId,
-        },
-      },
-      // video: {
-      //   mandatory: {
-      //     chromeMediaSource: "tab",
-      //     chromeMediaSourceId: streamId,
-      //   },
-      // },
-    });
-
-    // Continue to play the captured audio to the user.
-    audioContextRef.current = new AudioContext({
-      sampleRate: Constants.WHISPER_SAMPLING_RATE,
-    });
-    const source = audioContextRef.current.createMediaStreamSource(media);
-    source.connect(audioContextRef.current.destination);
-
-    // Start recording.
-    recorderRef.current = new MediaRecorder(media, { mimeType: "audio/webm" });
-    recorderRef.current.onstart = () => {
-      setIsRecording(true);
-      setChunks([]);
-    };
-
-    recorderRef.current.ondataavailable = (event) => {
-      if (event.data.size > 0) {
-        setChunks((prev) => [...prev, event.data]);
-        // sendAudioDataToBackground(event.data);
-      } else {
-        // Empty chunk received, so we request new data after a short timeout
-        setTimeout(() => {
-          recorderRef.current?.requestData();
-        }, 25);
+  const startRecording = useCallback(
+    async (streamId: string) => {
+      if (recorderRef.current?.state === "recording") {
+        throw new Error("Called startRecording while recording is in progress.");
       }
-    };
 
-    recorderRef.current.onstop = () => {
-      console.log("stop");
-      setIsRecording(false);
-    };
+      const media = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          mandatory: {
+            chromeMediaSource: "tab",
+            chromeMediaSourceId: streamId,
+          },
+        },
+        // video: {
+        //   mandatory: {
+        //     chromeMediaSource: "tab",
+        //     chromeMediaSourceId: streamId,
+        //   },
+        // },
+      });
 
-    recorderRef.current.start(3000);
-  }, []);
+      // Continue to play the captured audio to the user.
+      audioContextRef.current = new AudioContext({
+        sampleRate: Constants.WHISPER_SAMPLING_RATE,
+      });
+      const source = audioContextRef.current.createMediaStreamSource(media);
+      source.connect(audioContextRef.current.destination);
+
+      // Start recording.
+      recorderRef.current = new MediaRecorder(media, { mimeType: "audio/webm" });
+      recorderRef.current.onstart = () => {
+        setIsRecording(true);
+        setChunks([]);
+      };
+
+      recorderRef.current.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          const now = Date.now();
+          console.log("interval", chunkTime, (now - chunkTime) / 1000);
+          setChunkTime(now);
+          setChunks((prev) => [...prev, event.data]);
+          // sendAudioDataToBackground(event.data);
+        } else {
+          // Empty chunk received, so we request new data after a short timeout
+          setTimeout(() => {
+            recorderRef.current?.requestData();
+          }, 25);
+        }
+      };
+      recorderRef.current.onstop = () => {
+        console.log("stop");
+        setIsRecording(false);
+      };
+
+      recorderRef.current.start(3000);
+    },
+    [chunkTime],
+  );
 
   // Receive the message from background and handle them
   useEffect(() => {
@@ -284,46 +220,6 @@ function App() {
   }, [startRecording]);
 
   // handle the audio recording
-  // useEffect(() => {
-  //   if (!recorderRef.current || !isRecording || chunks.length === 0) return;
-
-  //   const processAudioChunk = async () => {
-  //     const blob = new Blob(chunks, { type: recorderRef.current!.mimeType });
-  //     setChunks([]); // Clear processed chunks
-
-  //     const arrayBuffer = await blob.arrayBuffer();
-  //     const decoded = await audioContextRef.current?.decodeAudioData(arrayBuffer);
-
-  //     console.log("decoded", decoded);
-
-  //     if (decoded && audioStreamManagerRef.current) {
-  //       let audio = decoded.getChannelData(0);
-  //       if (decoded.numberOfChannels === 2) {
-  //         // Mix down stereo to mono
-  //         const SCALING_FACTOR = Math.sqrt(2);
-  //         const right = decoded.getChannelData(1);
-  //         audio = new Float32Array(audio.length);
-  //         for (let i = 0; i < decoded.length; ++i) {
-  //           audio[i] = (SCALING_FACTOR * (decoded.getChannelData(0)[i] + right[i])) / 2;
-  //         }
-  //       }
-
-  //       const chunk = audioStreamManagerRef.current.addAudio(audio);
-  //       if (chunk) {
-  //         const serializedAudioData = Array.from(chunk);
-  //         sendMessageToBackground({
-  //           data: serializedAudioData,
-  //           action: "transcribe",
-  //           language: selectedLanguage,
-  //         });
-  //       }
-  //     }
-  //   };
-
-  //   processAudioChunk();
-  // }, [isRecording, selectedLanguage, chunks]);
-
-  // handle the audio recording
   useEffect(() => {
     if (!recorderRef.current) return;
     if (!isRecording) return;
@@ -337,28 +233,21 @@ function App() {
       fileReader.onloadend = async () => {
         const arrayBuffer = fileReader.result;
         if (arrayBuffer) {
-          let decoded: AudioBuffer | undefined;
-          try {
-            decoded = await audioContextRef.current?.decodeAudioData(arrayBuffer as ArrayBuffer);
-          } catch (error) {
-            console.log("error", error);
-          }
+          const decoded = await audioContextRef.current?.decodeAudioData(
+            arrayBuffer as ArrayBuffer,
+          );
           if (decoded) {
-            let audio = decoded.getChannelData(0);
-            if (audio.length > Constants.MAX_SAMPLES) {
-              // Get last MAX_SAMPLES
-              audio = audio.slice(-Constants.MAX_SAMPLES);
+            const audio = decoded.getChannelData(0);
+            const audioChunk = audioStreamManagerRef.current?.addAudio(audio);
+            if (audioChunk) {
+              console.log("audioChunk", audioChunk.length);
+              const serializedAudioData = Array.from(audioChunk);
+              sendMessageToBackground({
+                data: serializedAudioData,
+                action: "transcribe",
+                language: selectedLanguage,
+              });
             }
-            // const audioChunk = audioStreamManagerRef.current?.addAudio(audio);
-            // if (audioChunk) {
-            // console.log("audioChunk", audioChunk.length);
-            const serializedAudioData = Array.from(audio);
-            sendMessageToBackground({
-              data: serializedAudioData,
-              action: "transcribe",
-              language: selectedLanguage,
-            });
-            // }
           }
         }
       };
