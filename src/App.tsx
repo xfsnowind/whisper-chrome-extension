@@ -262,33 +262,15 @@ function App() {
   return IS_WEBGPU_AVAILABLE ? (
     <div className="min-w-64 min-h-32 p-4 bg-white">
       <div className="flex flex-col items-center justify-between mb-4 ">
+        <div className="w-full mb-4">
+          <LanguageSelector
+            value={selectedLanguage}
+            onChange={setSelectedLanguage}
+          />
+        </div>
         {isModelFilesReady ? (
           <div className="flex flex-col items-center justify-between mb-4">
             Model files loaded
-            <div className="w-full mb-4">
-              <LanguageSelector
-                value={selectedLanguage}
-                onChange={setSelectedLanguage}
-              />
-            </div>
-            {/* <FileTile
-              iconStr={FolderIcon}
-              text="From file"
-              onFileUpdate={(props) => {
-                setAudioData(props);
-              }}
-            />
-             {audioData && (
-              <div className="flex flex-col items-center justify-between mb-4">
-                File Name: {audioData.fileName}
-                <button
-                  className="text-white bg-blue-700 hover:bg-blue-800 focus:ring-4 my-4 focus:ring-blue-300 font-medium rounded-lg text-sm px-5 py-2.5 text-center mr-2 dark:bg-blue-600 dark:hover:bg-blue-700 dark:focus:ring-blue-800 inline-flex items-center"
-                  onClick={() => start(audioData.decoded)}
-                >
-                  Transcribe
-                </button>
-              </div>
-            )} */}
             {isRecording ? (
               <button
                 className="text-white bg-blue-700 hover:bg-blue-800 focus:ring-4 my-4 focus:ring-blue-300 font-medium rounded-lg text-sm px-5 py-2.5 text-center mr-2 dark:bg-blue-600 dark:hover:bg-blue-700 dark:focus:ring-blue-800 inline-flex items-center"
@@ -304,16 +286,6 @@ function App() {
                 Record
               </button>
             )}
-            {/* {recordData && (
-              <div className="flex flex-col items-center justify-between mb-4">
-                <button
-                  className="text-white bg-blue-700 hover:bg-blue-800 focus:ring-4 my-4 focus:ring-blue-300 font-medium rounded-lg text-sm px-5 py-2.5 text-center mr-2 dark:bg-blue-600 dark:hover:bg-blue-700 dark:focus:ring-blue-800 inline-flex items-center"
-                  onClick={() => start(recordData.decoded)}
-                >
-                  Transcribe
-                </button>
-              </div>
-            )} */}
           </div>
         ) : (
           <div className="w-full text-center">

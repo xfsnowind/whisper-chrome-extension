@@ -14,19 +14,21 @@ import {
 import Constants from "./Constants";
 import { match } from "ts-pattern";
 
-const model = "onnx-community/whisper-large-v2";
+// currently browser cannnot handle bigger model, maximum base
+// check the onnx file: https://huggingface.co/onnx-community/whisper-base/tree/main/onnx
+const model = "onnx-community/whisper-base";
+const pipelineConfig = {
+  dtype: {
+    encoder_model: "fp32",
+    decoder_model_merged: "fp32", // or q4, fp16
+  },
+  device: "webgpu",
+} as const;
 
 async function checkModelsLoaded() {
   try {
     // Load the pipeline for automatic speech recognition
-    const asrPipeline = await pipeline("automatic-speech-recognition", model, {
-      dtype: {
-        encoder_model: "fp32",
-        // encoder_model: model === "onnx-community/whisper-large-v3-turbo" ? "fp16" : "fp32",
-        decoder_model_merged: "q4", // or 'fp32' ('fp16' is broken)
-      },
-      device: "webgpu",
-    });
+    const asrPipeline = await pipeline("automatic-speech-recognition", model, pipelineConfig);
 
     // Assuming you have an audio input as a Float32Array or other valid format
     const audioInput = new Float32Array([0.0, 0.1, 0.15, 0.2, 0.05, -0.05]);
@@ -61,11 +63,7 @@ class AutomaticSpeechRecognitionPipeline {
     });
 
     this.model = WhisperForConditionalGeneration.from_pretrained(this.model_id, {
-      dtype: {
-        encoder_model: "fp32", // 'fp16' works too
-        decoder_model_merged: "q4", // or 'fp32' ('fp16' is broken)
-      },
-      device: "webgpu",
+      ...pipelineConfig,
       progress_callback,
     });
 
