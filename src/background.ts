@@ -10,7 +10,6 @@ import {
   TextStreamer,
   WhisperForConditionalGeneration,
   full,
-  env,
 } from "@huggingface/transformers";
 import Constants from "./Constants";
 import { match } from "ts-pattern";
@@ -80,30 +79,16 @@ const sendMessageToMain = chrome.runtime.sendMessage<Background.MessageToMain>;
 
 const handleModelFilesMessage = (message: Background.ModelFileMessage) => {
   match(message)
-    .with({ status: "initiate" }, { status: "progress" }, { status: "done" }, (msg) => {
-      // Model file start load: add a new progress item to the list.
-      sendMessageToMain(msg);
-    })
-    // .with({ status: "progress" }, (msg) => {
-    //   // loading the model file
-    //   // Model file progress: update one of the progress items.
-    //   setProgressItems((prev) =>
-    //     prev.map((item) => {
-    //       if (item.file === msg.file) {
-    //         return { ...item, progress: msg.progress };
-    //       }
-    //       return item;
-    //     }),
-    //   );
-    // })
-    // .with({ status: "done" }, (msg) => {
-    //   // Model file loaded: remove the progress item from the list.
-    //   setProgressItems((prev) => prev.filter((item) => item.file !== msg.file));
-    // })
-    .with({ status: "ready" }, () => {
-      // all the model files are ready
-      sendMessageToMain({ status: "ready" });
-    })
+    .with(
+      { status: "initiate" }, // initialize
+      { status: "progress" }, // get the download pregress
+      { status: "done" }, // done for one file
+      { status: "ready" }, // all the model files are ready
+      (msg) => {
+        // Model file start load: add a new progress item to the list.
+        sendMessageToMain(msg);
+      },
+    )
     .otherwise(() => null);
 };
 
@@ -134,7 +119,6 @@ const handleTranscribeMessage = (message: Background.TranscrbeMessage) => {
       sendMessageToMain(msg);
     })
     .with({ status: "transcribing" }, () => {
-      // sendMessageToMain({status: })
       // transcribing the file
       //   setTranscript({
       //     isBusy: true,
@@ -142,7 +126,6 @@ const handleTranscribeMessage = (message: Background.TranscrbeMessage) => {
       //     tps: message.data.tps,
       //     chunks: message.data.chunks
       //   });
-      // setIsBusy(true);
     })
     .with({ status: "error" }, ({ error }) => {
       alert(`An error occurred: "${error.message}". Please file a bug report.`);
@@ -180,6 +163,8 @@ const transcribeRecord = async ({
     },
   });
 
+  // const d = audio as Float32Array;
+  // console.log("audio, ", d.length);
   const inputs = await processor(audio);
 
   const outputs = await model.generate({
@@ -189,34 +174,16 @@ const transcribeRecord = async ({
     streamer,
   });
 
-  // NOTES: should be triggered after generate to request the new data
-  handleTranscribeMessage({ status: "startAgain" });
-
   const outputText = tokenizer.batch_decode(outputs as Tensor, { skip_special_tokens: true });
+  console.log("transcript:", outputText);
   return { chunks: outputText, tps };
 };
 
 async function startRecordTab(tabId: number) {
-  // const existingContexts = await chrome.runtime.getContexts({});
   const recording = false;
-
-  // const offscreenDocument = existingContexts.find((c) => c.contextType === "OFFSCREEN_DOCUMENT");
-
-  // // If an offscreen document is not already open, create one.
-  // if (!offscreenDocument) {
-  //   // Create an offscreen document.
-  //   await chrome.offscreen.createDocument({
-  //     url: "offscreen.html",
-  //     reasons: ["USER_MEDIA"],
-  //     justification: "Recording from chrome.tabCapture API",
-  //   });
-  // } else {
-  //   recording = offscreenDocument.documentUrl.endsWith("#recording");
-  // }
 
   if (recording) {
     sendMessageToMain({ status: "stop-recording" });
-    // chrome.action.setIcon({ path: "icons/not-recording.png" });
     return;
   }
 
@@ -228,8 +195,6 @@ async function startRecordTab(tabId: number) {
       data: streamId,
     });
   });
-
-  // chrome.action.setIcon({ path: "/icons/recording.png" });
 }
 
 /********************************************************* Handle Message from Main ************************************************************/
